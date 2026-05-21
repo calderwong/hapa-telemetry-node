@@ -1,0 +1,19 @@
+#!/usr/bin/env python3
+"""Hapa Telemetry Node CLI"""
+
+import os
+import sys
+from pathlib import Path
+
+repo_root = Path(__file__).resolve().parent
+venv_python = repo_root / ".venv" / "bin" / "python"
+if venv_python.exists() and sys.prefix == sys.base_prefix:
+    os.execv(str(venv_python), [str(venv_python), str(Path(__file__).resolve()), *sys.argv[1:]])
+
+# Add module to path
+sys.path.insert(0, str(repo_root))
+
+from hapa_telemetry_node.cli import main
+
+if __name__ == "__main__":
+    sys.exit(main())

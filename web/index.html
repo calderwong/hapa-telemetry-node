@@ -1,0 +1,3581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hapa Telemetry Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            /* Hapa Base Tokens */
+            --bg-primary: #0a0e27;
+            --bg-secondary: #151932;
+            --glass-bg: rgba(21, 25, 50, 0.7);
+            --glass-border: rgba(148, 163, 255, 0.1);
+            --text-primary: #e8eaff;
+            --text-secondary: #94a3ff;
+            
+            /* Astro-compliant Status Colors */
+            --status-success: #00ff88;
+            --status-warning: #ffa500;
+            --status-error: #ff4545;
+            --status-info: #00d4ff;
+            --accent-purple: #9945ff;
+            
+            /* Gravity UI Variables (Mode Driven) */
+            --hapa-panel-opacity: 1.0;
+            --hapa-bg-blur-px: 0px;
+            --hapa-anim-ms: 300ms;
+            --hapa-data-density: 1;
+            --hapa-input-density: 1;
+            --hapa-panel-locking: 0; /* 0: none, 1: partial, 2: full */
+            
+            --glow-green: 0 0 20px rgba(0, 255, 136, 0.5);
+            --glow-blue: 0 0 20px rgba(0, 212, 255, 0.5);
+        }
+
+        [data-ui-mode="browse"] {
+            --hapa-panel-opacity: 1.0;
+            --hapa-bg-blur-px: 0px;
+            --hapa-anim-ms: 300ms;
+            --hapa-data-density: 1;
+            --hapa-input-density: 1;
+            --hapa-panel-locking: 0;
+        }
+
+        [data-ui-mode="inspect"] {
+            --hapa-panel-opacity: 0.85;
+            --hapa-bg-blur-px: 10px;
+            --hapa-anim-ms: 500ms;
+            --hapa-data-density: 2;
+            --hapa-input-density: 0.8;
+            --hapa-panel-locking: 1;
+        }
+
+        [data-ui-mode="navigate"] {
+            --hapa-panel-opacity: 0.70;
+            --hapa-bg-blur-px: 16px;
+            --hapa-anim-ms: 150ms;
+            --hapa-data-density: 0.5;
+            --hapa-input-density: 0.5;
+            --hapa-panel-locking: 0;
+        }
+
+        [data-ui-mode="forge"] {
+            --hapa-panel-opacity: 0.90;
+            --hapa-bg-blur-px: 12px;
+            --hapa-anim-ms: 200ms;
+            --hapa-data-density: 1.5;
+            --hapa-input-density: 1.2;
+            --hapa-panel-locking: 2;
+        }
+
+        [data-ui-mode="compose"] {
+            --hapa-panel-opacity: 0.95;
+            --hapa-bg-blur-px: 6px;
+            --hapa-anim-ms: 300ms;
+            --hapa-data-density: 1.2;
+            --hapa-input-density: 1.2;
+            --hapa-panel-locking: 1;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            background-image: 
+                radial-gradient(ellipse at top left, rgba(148, 163, 255, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at bottom right, rgba(0, 212, 255, 0.1) 0%, transparent 50%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .header {
+            background: rgba(10, 14, 39, 0.8);
+            backdrop-filter: blur(var(--hapa-bg-blur-px));
+            border-bottom: 1px solid var(--glass-border);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            transition: backdrop-filter var(--hapa-anim-ms);
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .header h1 {
+            font-size: 1.25rem;
+            font-weight: 700;
+            margin: 0;
+            background: linear-gradient(135deg, var(--status-success) 0%, var(--status-info) 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.01em;
+        }
+
+        .mode-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(148, 163, 255, 0.1);
+            border-radius: 4px;
+            border: 1px solid var(--glass-border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            position: relative;
+        }
+
+        .mode-indicator::before {
+            content: '';
+            width: 4px;
+            height: 4px;
+            background: var(--accent-purple);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--accent-purple);
+        }
+
+        .breadcrumb {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .breadcrumb-item:not(:last-child)::after {
+            content: '/';
+            margin-left: 0.5rem;
+            opacity: 0.5;
+        }
+
+        .breadcrumb-item.active {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .mode-switcher {
+            display: flex;
+            gap: 2px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px;
+            border-radius: 6px;
+            border: 1px solid var(--glass-border);
+        }
+
+        .mode-btn {
+            padding: 0.35rem 0.75rem;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .mode-btn.active {
+            background: var(--accent-purple);
+            color: white;
+        }
+
+        .global-telemetry {
+            display: flex;
+            gap: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .telemetry-item {
+            display: flex;
+            gap: 0.25rem;
+            align-items: center;
+        }
+
+        .telemetry-label { opacity: 0.6; }
+        .telemetry-value { color: var(--text-primary); font-weight: 600; }
+        
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--status-success);
+            display: inline-block;
+            box-shadow: 0 0 10px var(--status-success);
+            animation: status-pulse 2s infinite;
+        }
+
+        @keyframes status-pulse {
+            0% { transform: scale(1); opacity: 1; box-shadow: 0 0 10px var(--status-success); }
+            50% { transform: scale(1.2); opacity: 0.7; box-shadow: 0 0 20px var(--status-success); }
+            100% { transform: scale(1); opacity: 1; box-shadow: 0 0 10px var(--status-success); }
+        }
+        
+        @media (prefers-reduced-motion: reduce) {
+            :root {
+                --hapa-bg-blur-px: 0px !important;
+                --hapa-anim-ms: 0ms !important;
+            }
+            * {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+                scroll-behavior: auto !important;
+            }
+        }
+        
+        .container {
+            padding: 2rem;
+        }
+        
+        .auth-section {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(var(--hapa-bg-blur-px));
+            transition: all var(--hapa-anim-ms) ease-in-out;
+            opacity: var(--hapa-panel-opacity);
+        }
+        
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            opacity: var(--hapa-panel-opacity);
+            transition: opacity var(--hapa-anim-ms);
+        }
+        
+        .input-group input, #token-input {
+            flex: 1;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+        }
+
+        .input-group input:focus, #token-input:focus {
+            outline: none;
+            border-color: var(--status-info);
+            box-shadow: 0 0 10px rgba(0, 212, 255, 0.2);
+        }
+        
+        .btn {
+            padding: 0.6rem 1.25rem;
+            background: var(--status-success);
+            color: var(--bg-primary);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
+            filter: brightness(1.1);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn-secondary {
+            background: rgba(148, 163, 255, 0.1);
+            color: var(--text-primary);
+            border: 1px solid var(--glass-border);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(148, 163, 255, 0.2);
+            border-color: var(--text-secondary);
+            box-shadow: 0 4px 12px rgba(148, 163, 255, 0.1);
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        
+        .card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(var(--hapa-bg-blur-px));
+            transition: all var(--hapa-anim-ms) cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(148, 163, 255, 0.05) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        /* Cyber-arcane Scanline Effect */
+        .card::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                to bottom,
+                transparent 50%,
+                rgba(0, 212, 255, 0.02) 50%
+            );
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 1;
+            opacity: 0.5;
+        }
+
+        .card:hover {
+            border-color: rgba(148, 163, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+        }
+
+        .modal-content {
+            position: relative;
+            margin: 40px auto;
+            max-width: 1000px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 2.5rem;
+            max-height: calc(100vh - 80px);
+            overflow-y: auto;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(20px);
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+            font-weight: 600;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--status-info);
+        }
+
+        .log-container {
+            background: #050714;
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            color: #d1d5db;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* Mode Gravity: Surface Prioritization */
+        [data-ui-mode="navigate"] .grid {
+            display: flex;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            padding-bottom: 1rem;
+            gap: 1rem;
+            mask-image: linear-gradient(to right, black 80%, transparent);
+        }
+
+        [data-ui-mode="navigate"] .card {
+            flex: 0 0 250px;
+            transform: scale(0.9);
+        }
+
+        [data-ui-mode="navigate"] .graph-container {
+            height: calc(100vh - 300px);
+            min-height: 600px;
+        }
+
+        /* Inspect Mode: Focus */
+        [data-ui-mode="inspect"] .container {
+            filter: grayscale(0.5) brightness(0.8);
+            pointer-events: none;
+        }
+
+        [data-ui-mode="inspect"] #node-inspector {
+            display: block;
+        }
+
+        [data-ui-mode="inspect"] #node-inspector,
+        [data-ui-mode="forge"] #launcher-modal {
+            pointer-events: auto;
+        }
+
+        /* Forge Mode: Ritualized Creation (Launcher) */
+        [data-ui-mode="forge"] .container {
+            filter: blur(4px) brightness(0.5);
+            pointer-events: none;
+        }
+
+        [data-ui-mode="forge"] #launcher-modal {
+            display: block;
+        }
+
+        #launcher-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(20px);
+            z-index: 1050;
+        }
+
+        /* Node Inspector Modal */
+        #node-inspector {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(10, 14, 39, 0.95);
+            backdrop-filter: blur(20px);
+            z-index: 1100;
+        }
+
+        .inspector-content {
+            position: relative;
+            margin: 20px auto;
+            max-width: 1200px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 3rem;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 3rem;
+        }
+
+        .inspector-panel {
+            background: rgba(148, 163, 255, 0.05);
+            border-radius: 12px;
+            border: 1px solid var(--glass-border);
+            padding: 1.5rem;
+        }
+
+        .inspector-panel h3 {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--glass-border);
+            padding-bottom: 0.5rem;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .detail-label { color: var(--text-secondary); }
+        .detail-value { color: var(--text-primary); font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+
+        .capability-chip {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background: rgba(153, 69, 255, 0.2);
+            border: 1px solid rgba(153, 69, 255, 0.4);
+            color: var(--accent-purple);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            margin: 0.25rem;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+        
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        
+        .card-badge {
+            background: rgba(168, 85, 247, 0.2);
+            color: var(--accent-purple);
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+        }
+        
+        .stats {
+            display: flex;
+            gap: 2rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+            padding: 1.5rem;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+        }
+        
+        .stat {
+            text-align: center;
+            position: relative;
+        }
+        
+        .stat::after {
+            content: '';
+            position: absolute;
+            right: -1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 1px;
+            height: 60%;
+            background: var(--glass-border);
+        }
+        
+        .stat:last-child::after {
+            display: none;
+        }
+        
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            background: linear-gradient(to bottom, var(--text-primary), var(--text-secondary));
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 500;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        
+        .metric {
+            display: flex;
+            flex-direction: column;
+            padding: 0.75rem;
+            background: rgba(21, 25, 50, 0.4);
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+        }
+        
+        .metric-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-bottom: 0.25rem;
+            letter-spacing: 0.05em;
+            font-weight: 500;
+        }
+        
+        .metric-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-primary);
+        }
+        
+        .metric-bar {
+            margin-top: 0.25rem;
+            height: 4px;
+            background: rgba(148, 163, 255, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .metric-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+        
+        .metric-fill.green {
+            background: linear-gradient(90deg, var(--accent-green), rgba(0, 255, 136, 0.7));
+        }
+        
+        .metric-fill.blue {
+            background: linear-gradient(90deg, var(--accent-blue), rgba(0, 212, 255, 0.7));
+        }
+        
+        .metric-fill.warning {
+            background: linear-gradient(90deg, var(--warning), rgba(255, 165, 0, 0.7));
+        }
+        
+        .metric-fill.critical {
+            background: linear-gradient(90deg, var(--critical), rgba(255, 69, 69, 0.7));
+        }
+        
+        .node-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.875rem;
+            border-radius: 24px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            position: relative;
+        }
+        
+        .node-status::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .node-status.online {
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 255, 136, 0.1));
+            color: var(--status-success);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+        
+        .node-status.online::before {
+            background: var(--status-success);
+            box-shadow: var(--glow-green);
+        }
+        
+        .node-status.offline {
+            background: linear-gradient(135deg, rgba(255, 69, 69, 0.2), rgba(255, 69, 69, 0.1));
+            color: var(--status-error);
+            border: 1px solid rgba(255, 69, 69, 0.3);
+        }
+        
+        .node-status.offline::before {
+            background: var(--status-error);
+            animation: none;
+        }
+        
+        .node-status.degraded {
+            background: linear-gradient(135deg, rgba(255, 165, 0, 0.2), rgba(255, 165, 0, 0.1));
+            color: var(--status-warning);
+            border: 1px solid rgba(255, 165, 0, 0.3);
+        }
+        
+        .node-status.degraded::before {
+            background: var(--status-warning);
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+            background: rgba(148, 163, 255, 0.02);
+            border: 1px dashed var(--glass-border);
+            border-radius: 12px;
+            margin: 2rem 0;
+        }
+        
+        .empty-state h3 {
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            letter-spacing: 0.05em;
+        }
+
+        .empty-state p {
+            font-size: 0.85rem;
+            opacity: 0.7;
+        }
+        
+        .graph-container {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-top: 2rem;
+            min-height: 400px;
+            backdrop-filter: blur(var(--hapa-bg-blur-px));
+            transition: all var(--hapa-anim-ms) cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        #graph-svg {
+            width: 100%;
+            height: 400px;
+        }
+
+        .overwatch-command-center {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-top: 2rem;
+            backdrop-filter: blur(var(--hapa-bg-blur-px));
+            transition: all var(--hapa-anim-ms) cubic-bezier(0.4, 0, 0.2, 1);
+            display: none;
+        }
+
+        [data-ui-mode="compose"] .overwatch-command-center {
+            display: block;
+        }
+
+        [data-ui-mode="compose"] #nodes-grid,
+        [data-ui-mode="compose"] .graph-container {
+            display: none;
+        }
+
+        .ow-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .ow-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            letter-spacing: 0.05em;
+        }
+
+        .ow-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+        }
+
+        .ow-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .ow-tab {
+            padding: 0.4rem 0.75rem;
+            border: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.25);
+            color: var(--text-secondary);
+            border-radius: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .ow-tab.active {
+            background: rgba(153, 69, 255, 0.25);
+            color: var(--text-primary);
+            border-color: rgba(153, 69, 255, 0.6);
+        }
+
+        .ow-panel {
+            display: none;
+        }
+
+        .ow-panel.active {
+            display: block;
+        }
+
+        .ow-row {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .ow-col {
+            flex: 1 1 420px;
+            min-width: 320px;
+        }
+
+        .ow-pre {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            overflow: auto;
+            max-height: 520px;
+        }
+
+        .ow-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        .ow-table th {
+            text-align: left;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--glass-border);
+            padding: 0.6rem 0.5rem;
+        }
+
+        .ow-table td {
+            border-bottom: 1px solid rgba(148, 163, 255, 0.08);
+            padding: 0.6rem 0.5rem;
+            vertical-align: top;
+        }
+
+        .ow-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.2rem 0.5rem;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-family: 'JetBrains Mono', monospace;
+            border: 1px solid var(--glass-border);
+            background: rgba(0, 0, 0, 0.2);
+            color: var(--text-secondary);
+        }
+
+        .ow-badge.ok {
+            color: var(--status-success);
+            border-color: rgba(0, 255, 136, 0.35);
+            background: rgba(0, 255, 136, 0.08);
+        }
+
+        .ow-badge.warn {
+            color: var(--status-warning);
+            border-color: rgba(255, 165, 0, 0.35);
+            background: rgba(255, 165, 0, 0.08);
+        }
+
+        .ow-badge.err {
+            color: var(--status-error);
+            border-color: rgba(255, 69, 69, 0.35);
+            background: rgba(255, 69, 69, 0.08);
+        }
+
+        .ow-inline-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .ow-mini {
+            padding: 0.35rem 0.65rem;
+            font-size: 0.75rem;
+            letter-spacing: 0.02em;
+        }
+    </style>
+</head>
+<body>
+    <header class="header" id="app-header">
+        <div class="header-left">
+            <h1>🔮 HAPA TELEMETRY</h1>
+            <div class="mode-indicator" id="mode-indicator">Mode: BROWSE</div>
+            <div class="mode-switcher">
+                <button type="button" class="mode-btn active" onclick="setUiMode('browse')" id="btn-browse">Browse</button>
+                <button type="button" class="mode-btn" onclick="setUiMode('inspect')" id="btn-inspect">Inspect</button>
+                <button type="button" class="mode-btn" onclick="setUiMode('navigate')" id="btn-navigate">Navigate</button>
+                <button type="button" class="mode-btn" onclick="setUiMode('forge')" id="btn-forge">Forge</button>
+                <button type="button" class="mode-btn" onclick="setUiMode('compose')" id="btn-compose">Compose</button>
+            </div>
+        </div>
+        
+        <div class="global-telemetry">
+            <div class="telemetry-item">
+                <span class="telemetry-label">AUTH:</span>
+                <span class="telemetry-value" id="status-text">DISCONNECTED</span>
+            </div>
+            <div class="telemetry-item">
+                <span class="telemetry-label">SYS:</span>
+                <span class="telemetry-value" id="global-sys">NOMINAL</span>
+            </div>
+            <div class="telemetry-item">
+                <span class="telemetry-label">NET:</span>
+                <span class="telemetry-value" id="global-net">CONNECTED</span>
+            </div>
+            <div class="telemetry-item">
+                <span class="telemetry-label">ACTIVE:</span>
+                <span class="telemetry-value" id="active-count">0</span>
+            </div>
+            <div class="telemetry-item">
+                <span class="telemetry-label">NODES:</span>
+                <span class="telemetry-value" id="node-count">0</span>
+            </div>
+            <div class="status-dot"></div>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="auth-section">
+            <h3>Authentication</h3>
+            <input type="password" id="token-input" placeholder="Bearer token" oninput="handleTokenInput()">
+            <button class="btn" onclick="connect()">Connect</button>
+            <div id="token-hint" style="font-size: 0.85rem; color: #666; margin-top: 0.5rem;"></div>
+        </div>
+        
+        <div class="controls">
+            <button class="btn" onclick="discoverNodes()">🔍 Discover</button>
+            <button class="btn" onclick="refreshData()">🔄 Refresh</button>
+            <button class="btn" onclick="registerNode()">➕ Add Node</button>
+            <button class="btn" onclick="showLauncher()">🚀 Launcher</button>
+        </div>
+
+        <div class="overwatch-command-center" id="overwatch-command-center">
+            <div class="ow-header">
+                <div>
+                    <div class="breadcrumb" style="margin-bottom: 0.25rem;">
+                        <span class="breadcrumb-item">Overwatch</span>
+                        <span class="breadcrumb-item active">Command Center</span>
+                    </div>
+                    <div class="ow-title">🛰️ OVERWATCH BRIDGE</div>
+                    <div class="ow-subtitle" id="ow-root">Root: —</div>
+                    <div class="ow-subtitle" id="ow-writes">Writes: —</div>
+                </div>
+                <div class="ow-inline-actions">
+                    <button class="btn btn-secondary ow-mini" onclick="refreshOverwatch()">🔄 Sync</button>
+                    <button class="btn btn-secondary ow-mini" onclick="copyOverwatchRoot()">📋 Copy Root</button>
+                    <button class="btn btn-secondary ow-mini" onclick="saveOverwatchSnapshot()">💾 Save Snapshot</button>
+                </div>
+            </div>
+
+            <div class="ow-tabs">
+                <button class="ow-tab" id="ow-tab-browse" onclick="setOverwatchTab('browse')">Browse</button>
+                <button class="ow-tab" id="ow-tab-summary" onclick="setOverwatchTab('summary')">Summary</button>
+                <button class="ow-tab active" id="ow-tab-status" onclick="setOverwatchTab('status')">Status Board</button>
+                <button class="ow-tab" id="ow-tab-tasks" onclick="setOverwatchTab('tasks')">Task Inbox</button>
+                <button class="ow-tab" id="ow-tab-activity" onclick="setOverwatchTab('activity')">Activity</button>
+                <button class="ow-tab" id="ow-tab-protocols" onclick="setOverwatchTab('protocols')">Protocol Scorecards</button>
+                <button class="ow-tab" id="ow-tab-cards" onclick="setOverwatchTab('cards')">Test Cards</button>
+                <button class="ow-tab" id="ow-tab-checkins" onclick="setOverwatchTab('checkins')">Check-ins</button>
+                <button class="ow-tab" id="ow-tab-search" onclick="setOverwatchTab('search')">Search</button>
+                <button class="ow-tab" id="ow-tab-chat" onclick="setOverwatchTab('chat')">Chat</button>
+            </div>
+
+            <div class="ow-panel" id="ow-panel-summary">
+                <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                    <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Snapshot</div>
+                    <button class="btn btn-secondary ow-mini" onclick="loadOverwatchSummary()">Reload</button>
+                </div>
+                <div id="ow-summary"></div>
+            </div>
+
+            <div class="ow-panel" id="ow-panel-browse">
+                <div class="ow-row">
+                    <div class="ow-col" style="flex: 1 1 360px;">
+                        <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                            <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Filesystem</div>
+                            <div class="ow-inline-actions">
+                                <button class="btn btn-secondary ow-mini" onclick="overwatchBrowseUp()">⬆️ Up</button>
+                                <button class="btn btn-secondary ow-mini" onclick="overwatchBrowseHome()">🏠 Root</button>
+                                <button class="btn btn-secondary ow-mini" onclick="refreshOverwatchBrowse()">Reload</button>
+                            </div>
+                        </div>
+                        <div class="ow-subtitle" id="ow-browse-path">Path: —</div>
+                        <div id="ow-browse-list"></div>
+                    </div>
+                    <div class="ow-col">
+                        <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                            <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Preview</div>
+                            <div class="ow-inline-actions">
+                                <button class="btn btn-secondary ow-mini" onclick="copyOverwatchSelectedRelPath()">📋 Copy Rel</button>
+                                <button class="btn btn-secondary ow-mini" onclick="copyOverwatchSelectedAbsPath()">📋 Copy Abs</button>
+                                <button class="btn btn-secondary ow-mini" onclick="openOverwatchSelectedFile()">Open</button>
+                            </div>
+                        </div>
+                        <div class="ow-subtitle" id="ow-browse-meta">—</div>
+                        <div class="ow-pre" id="ow-browse-content">Select a file to preview.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ow-panel active" id="ow-panel-status">
+                <div class="ow-row">
+                    <div class="ow-col">
+                        <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                            <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Core services</div>
+                            <button class="btn btn-secondary ow-mini" onclick="openOverwatchDoc('status_board')">Open Doc</button>
+                        </div>
+                        <div id="ow-status-core"></div>
+                    </div>
+                    <div class="ow-col">
+                        <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                            <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Prototypes</div>
+                            <button class="btn btn-secondary ow-mini" onclick="openOverwatchDoc('status_board')">Open Doc</button>
+                        </div>
+                        <div id="ow-status-proto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ow-panel" id="ow-panel-tasks">
+                <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                    <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Active tasks</div>
+                    <div class="ow-inline-actions">
+                        <input id="ow-task-filter" class="form-control" style="max-width: 280px; padding: 0.5rem 0.75rem; font-size: 0.8rem;" placeholder="Filter (e.g. OPEN, CLAIMED, repo, id...)" oninput="renderOverwatchTasks()" />
+                        <button class="btn btn-secondary ow-mini" onclick="toggleOverwatchTaskCompose()">➕ New Task</button>
+                        <button class="btn btn-secondary ow-mini" onclick="openOverwatchDoc('task_inbox')">Open Doc</button>
+                    </div>
+                </div>
+                <div id="ow-task-compose" style="display:none; margin-bottom: 1rem;">
+                    <div class="card" style="padding: 1.25rem;">
+                        <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem;">Create TASK_INBOX entry (env-gated)</div>
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <input id="ow-new-task-title" class="form-control" placeholder="Title (required)" />
+                            <input id="ow-new-task-repo" class="form-control" placeholder="Repo (absolute path)" />
+                            <input id="ow-new-task-target" class="form-control" placeholder="Target agent (default ANY)" />
+                            <input id="ow-new-task-requested" class="form-control" placeholder="Requested by (agent id / human)" />
+                            <input id="ow-new-task-timebox" class="form-control" placeholder="Timebox (e.g. 20 minutes)" />
+                            <input id="ow-new-task-files" class="form-control" placeholder="Files (paths or n/a)" />
+                        </div>
+                        <div style="margin-top: 1rem; display:grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                            <textarea id="ow-new-task-goal" class="form-control" style="min-height: 90px;" placeholder="Goal (one sentence)"></textarea>
+                            <textarea id="ow-new-task-validation" class="form-control" style="min-height: 90px;" placeholder="Validation (commands + pass signals)"></textarea>
+                        </div>
+                        <div style="margin-top: 1rem;">
+                            <textarea id="ow-new-task-dod" class="form-control" style="min-height: 90px;" placeholder="Definition of done"></textarea>
+                        </div>
+                        <div class="ow-inline-actions" style="margin-top: 1rem;">
+                            <button class="btn btn-secondary ow-mini" onclick="previewOverwatchNewTask()">Preview</button>
+                            <button class="btn ow-mini" onclick="createOverwatchNewTask()">Create</button>
+                            <button class="btn btn-secondary ow-mini" onclick="toggleOverwatchTaskCompose(false)">Cancel</button>
+                        </div>
+                        <div class="ow-pre" id="ow-task-compose-preview" style="margin-top: 1rem; max-height: 260px;">Preview will appear here.</div>
+                    </div>
+                </div>
+                <div id="ow-tasks"></div>
+            </div>
+
+            <div class="ow-panel" id="ow-panel-activity">
+                <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                    <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Recent events</div>
+                    <div class="ow-inline-actions">
+                        <input id="ow-activity-limit" class="form-control" style="max-width: 120px; padding: 0.5rem 0.75rem; font-size: 0.8rem;" placeholder="Limit" value="50" />
+                        <button class="btn btn-secondary ow-mini" onclick="loadOverwatchActivity()">Reload</button>
+                    </div>
+                </div>
+                <div id="ow-activity"></div>
+            </div>
+
+            <div class="ow-panel" id="ow-panel-protocols">
+                <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                    <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Docs / protocol freshness</div>
+                    <div class="ow-inline-actions">
+                        <input id="ow-protocol-filter" class="form-control" style="max-width: 260px; padding: 0.5rem 0.75rem; font-size: 0.8rem;" placeholder="Filter (fresh, title, rel_path...)" oninput="renderOverwatchProtocolScorecards()" />
+                        <input id="ow-protocol-max-files" class="form-control" style="max-width: 120px; padding: 0.5rem 0.75rem; font-size: 0.8rem;" placeholder="Max files" value="250" />
+                        <button class="btn btn-secondary ow-mini" onclick="loadOverwatchProtocolScorecards()">Reload</button>
+                    </div>
+                </div>
+                <div id="ow-protocol-scorecards"></div>
+            </div>
+
+            <div class="ow-panel" id="ow-panel-cards">
+                <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                    <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Deck items</div>
+                    <div class="ow-inline-actions">
+                        <input id="ow-card-filter" class="form-control" style="max-width: 280px; padding: 0.5rem 0.75rem; font-size: 0.8rem;" placeholder="Filter (id/title/tag...)" oninput="renderOverwatchCards()" />
+                        <button class="btn btn-secondary ow-mini" onclick="openOverwatchDoc('test_card_deck')">Open Deck</button>
+                        <button class="btn btn-secondary ow-mini" onclick="openOverwatchDoc('test_card_deck_items')">Open JSON</button>
+                    </div>
+                </div>
+                <div id="ow-cards"></div>
+            </div>
+
+            <div class="ow-panel" id="ow-panel-checkins">
+                <div class="ow-row">
+                    <div class="ow-col" style="flex: 1 1 360px;">
+                        <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                            <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Recent check-ins</div>
+                            <div class="ow-inline-actions">
+                                <button class="btn btn-secondary ow-mini" onclick="toggleOverwatchCheckInCompose()">➕ New Stub</button>
+                                <button class="btn btn-secondary ow-mini" onclick="loadOverwatchCheckIns()">Reload</button>
+                            </div>
+                        </div>
+                        <div id="ow-checkin-compose" style="display:none; margin-bottom: 1rem;">
+                            <div class="card" style="padding: 1.25rem;">
+                                <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.75rem;">Create check-in stub (env-gated)</div>
+                                <div class="ow-inline-actions">
+                                    <input id="ow-new-checkin-topic" class="form-control" placeholder="Topic (e.g. telemetry_overwatch_command_center)" />
+                                    <button class="btn btn-secondary ow-mini" onclick="previewOverwatchCheckInStub()">Preview</button>
+                                    <button class="btn ow-mini" onclick="createOverwatchCheckInStub()">Create</button>
+                                    <button class="btn btn-secondary ow-mini" onclick="toggleOverwatchCheckInCompose(false)">Cancel</button>
+                                </div>
+                                <div class="ow-pre" id="ow-checkin-compose-preview" style="margin-top: 1rem; max-height: 260px;">Preview will appear here.</div>
+                            </div>
+                        </div>
+                        <div id="ow-checkins"></div>
+                    </div>
+                    <div class="ow-col">
+                        <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                            <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Selected</div>
+                            <div class="ow-inline-actions">
+                                <button class="btn btn-secondary ow-mini" onclick="copySelectedCheckInPath()">📋 Copy Path</button>
+                            </div>
+                        </div>
+                        <div class="ow-pre" id="ow-checkin-content">Select a check-in to view its contents.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ow-panel" id="ow-panel-search">
+                <div class="ow-inline-actions" style="margin-bottom: 0.75rem;">
+                    <input id="ow-search-input" class="form-control" style="flex: 1; padding: 0.6rem 0.9rem; font-size: 0.85rem;" placeholder="Search Overwatch (docs + check-ins)" onkeydown="if(event.key==='Enter'){runOverwatchSearch();}" />
+                    <button class="btn" onclick="runOverwatchSearch()">🔎 Search</button>
+                    <label style="display:flex; align-items:center; gap:0.35rem; font-family:'JetBrains Mono', monospace; font-size:0.75rem; color:var(--text-secondary);">
+                        <input type="checkbox" id="ow-search-tree" />
+                        Full tree
+                    </label>
+                    <input id="ow-search-scope" class="form-control" style="max-width: 240px; padding: 0.6rem 0.9rem; font-size: 0.85rem;" placeholder="Scope (rel_path)" />
+                </div>
+                <div id="ow-search-results"></div>
+            </div>
+
+            <div class="ow-panel" id="ow-panel-chat">
+                <div class="ow-inline-actions" style="justify-content: space-between; margin-bottom: 0.75rem;">
+                    <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em;">Ask Overwatch (citations + local LLaDA)</div>
+                    <button class="btn btn-secondary ow-mini" onclick="clearOverwatchChat()">Clear</button>
+                </div>
+                <div class="card" style="padding: 1.25rem; margin-bottom: 0.75rem;">
+                    <textarea id="ow-chat-prompt" class="form-control" style="min-height: 120px;" placeholder="Ask a question..." onkeydown="if((event.metaKey||event.ctrlKey) && event.key==='Enter'){runOverwatchChat();}"></textarea>
+                    <div class="ow-inline-actions" style="margin-top: 0.75rem;">
+                        <input id="ow-chat-max-tokens" class="form-control" style="max-width: 140px; padding: 0.5rem 0.75rem; font-size: 0.8rem;" placeholder="max_tokens" value="300" />
+                        <input id="ow-chat-temperature" class="form-control" style="max-width: 140px; padding: 0.5rem 0.75rem; font-size: 0.8rem;" placeholder="temperature" value="0.2" />
+                        <button class="btn ow-mini" onclick="runOverwatchChat()">Send</button>
+                    </div>
+                </div>
+                <div class="ow-pre" id="ow-chat-answer">Ask a question above. (Ctrl/Cmd+Enter to send)</div>
+                <div id="ow-chat-citations" style="margin-top: 0.75rem;"></div>
+            </div>
+        </div>
+        
+        <div class="grid" id="nodes-grid">
+            <div class="empty-state" style="grid-column: 1/-1;">
+                <h3>No nodes discovered</h3>
+                <p>Enter your token and click Connect to start</p>
+            </div>
+        </div>
+        
+        <div class="graph-container">
+            <h3 style="margin-bottom: 1rem;">Node Relationships</h3>
+            <svg id="graph-svg"></svg>
+        </div>
+        
+        <!-- Launcher Modal -->
+        <div id="launcher-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="breadcrumb" style="margin-bottom: 0;">
+                        <span class="breadcrumb-item">System</span>
+                        <span class="breadcrumb-item active">Launcher</span>
+                    </div>
+                    <button class="close-btn" onclick="closeLauncher()">✕</button>
+                </div>
+                
+                <div class="list-container">
+                    <div class="list-section">
+                        <h3>Available Node Types</h3>
+                        <div id="registry-list" style="max-height:400px; overflow-y:auto;"></div>
+                    </div>
+                    <div class="list-section">
+                        <h3>Running Instances</h3>
+                        <div id="instances-list" style="max-height:400px; overflow-y:auto;"></div>
+                    </div>
+                </div>
+                
+                <div id="launch-form" style="margin-top:2.5rem; padding-top:2rem; border-top:1px solid var(--glass-border); display:none;">
+                    <h3 style="margin-bottom:1.5rem;">Launch Configuration</h3>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:1.5rem;">
+                        <div class="form-group">
+                            <label>Node Type</label>
+                            <input type="text" id="launch-type" class="form-control" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label>Port (Optional)</label>
+                            <input type="number" id="launch-port" class="form-control" placeholder="Auto-assign">
+                        </div>
+                        <div class="form-group">
+                            <label>Instance ID</label>
+                            <input type="text" id="launch-instance" class="form-control" placeholder="Auto-generated">
+                        </div>
+                        <div class="form-group">
+                            <label>Environment Variables</label>
+                            <input type="text" id="launch-env" class="form-control" placeholder="KEY=VALUE, KEY2=VALUE2">
+                        </div>
+                    </div>
+                    <div style="margin-top:1.5rem; display:flex; gap:1rem;">
+                        <button class="btn" onclick="launchNode()">🚀 Launch Instance</button>
+                        <button class="btn btn-secondary" onclick="cancelLaunch()">Cancel</button>
+                    </div>
+                </div>
+                
+                <div id="instance-logs" style="margin-top:2.5rem; padding-top:2rem; border-top:1px solid var(--glass-border); display:none;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem;">
+                        <h3 style="margin:0;">Logs: <span id="logs-instance-id" style="color:var(--status-info);"></span></h3>
+                        <button class="btn btn-secondary" style="padding:0.4rem 0.8rem; font-size:0.75rem;" onclick="refreshLogs()">🔄 Refresh</button>
+                    </div>
+                    <div id="logs-content" class="log-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Node Inspector Modal -->
+        <div id="node-inspector">
+            <div class="inspector-content">
+                <button class="close-btn" onclick="closeInspector()" style="position:absolute; top:1.5rem; right:1.5rem;">✕</button>
+                
+                <div class="inspector-panel">
+                    <h3>Node Identity</h3>
+                    <div id="inspector-identity"></div>
+                    
+                    <h3 style="margin-top:2rem;">Status & Health</h3>
+                    <div id="inspector-health"></div>
+                    
+                    <h3 style="margin-top:2rem;">Network</h3>
+                    <div id="inspector-network"></div>
+                </div>
+                
+                <div class="inspector-panel">
+                    <h3>Performance History</h3>
+                    <div id="inspector-metrics-grid" class="metrics" style="grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-bottom: 2rem;"></div>
+                    
+                    <h3>Capabilities</h3>
+                    <div id="inspector-capabilities" style="margin-top:1rem; display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+                    
+                    <h3 style="margin-top:2rem;">Relationships</h3>
+                    <div id="inspector-relationships" style="height:200px; background:rgba(0,0,0,0.2); border-radius:8px; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 0.8rem;">
+                        Graph visualization active in NAVIGATE mode
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        let token = '';
+        let connected = false;
+        let nodes = [];
+        let instances = []; // Global instance list for log lookup
+        let telemetryData = {};
+        let refreshInterval = null;
+        
+        // Dev-only token persistence
+        const isLocalDev = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
+        const TOKEN_STORAGE_KEY = 'hapa_telemetry_dev_token_v1';
+        
+        let currentUiMode = 'browse';
+        
+        function setUiMode(mode) {
+            currentUiMode = mode;
+            document.documentElement.setAttribute('data-ui-mode', mode);
+            
+            // Update UI buttons
+            ['browse', 'inspect', 'navigate', 'forge', 'compose'].forEach(m => {
+                const btn = document.getElementById(`btn-${m}`);
+                if (btn) btn.classList.toggle('active', m === mode);
+            });
+            
+            const indicator = document.getElementById('mode-indicator');
+            if (indicator) indicator.textContent = `Mode: ${mode.toUpperCase()}`;
+            
+            // Apply mode-specific visibility/density
+            updateNodesGrid();
+            loadGraph();
+
+            // Special handling for modes
+            if (mode === 'forge') {
+                loadRegistry();
+                loadInstances();
+            } else if (mode === 'browse') {
+                closeLauncher();
+                closeInspector();
+            } else if (mode === 'compose') {
+                refreshOverwatch();
+            }
+        }
+
+        let overwatchState = {
+            root: null,
+            health: null,
+            summary: null,
+            statusBoard: null,
+            taskInbox: null,
+            activity: null,
+            protocolScorecards: null,
+            testCards: null,
+            checkIns: null,
+            selectedCheckIn: null,
+            searchResults: null,
+            chat: null,
+            browseCwd: '',
+            browseListing: null,
+            browseSelectedRelPath: null,
+            browseSelected: null,
+        };
+
+        function setOverwatchTab(tab) {
+            ['browse', 'summary', 'status', 'tasks', 'activity', 'protocols', 'cards', 'checkins', 'search', 'chat'].forEach(t => {
+                const btn = document.getElementById(`ow-tab-${t}`);
+                const panel = document.getElementById(`ow-panel-${t}`);
+                if (btn) btn.classList.toggle('active', t === tab);
+                if (panel) panel.classList.toggle('active', t === tab);
+            });
+
+            if (!token) {
+                return;
+            }
+
+            if (tab === 'browse' && !overwatchState.browseListing) loadOverwatchBrowseDir(overwatchState.browseCwd || '');
+            if (tab === 'summary' && !overwatchState.summary) loadOverwatchSummary();
+            if (tab === 'status' && !overwatchState.statusBoard) loadOverwatchStatusBoard();
+            if (tab === 'tasks' && !overwatchState.taskInbox) loadOverwatchTaskInbox();
+            if (tab === 'activity' && !overwatchState.activity) loadOverwatchActivity();
+            if (tab === 'protocols' && !overwatchState.protocolScorecards) loadOverwatchProtocolScorecards();
+            if (tab === 'cards' && !overwatchState.testCards) loadOverwatchTestCards();
+            if (tab === 'checkins' && !overwatchState.checkIns) loadOverwatchCheckIns();
+        }
+
+        function _normalizeRelPath(relPath) {
+            return String(relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
+        }
+
+        function _parentRelPath(relPath) {
+            const p = _normalizeRelPath(relPath);
+            if (!p) return '';
+            const parts = p.split('/').filter(Boolean);
+            parts.pop();
+            return parts.join('/');
+        }
+
+        async function loadOverwatchBrowseDir(relPath) {
+            if (!token) return;
+
+            const safe = _normalizeRelPath(relPath);
+            overwatchState.browseCwd = safe;
+
+            const listEl = document.getElementById('ow-browse-list');
+            const pathEl = document.getElementById('ow-browse-path');
+            if (pathEl) pathEl.textContent = `Path: ${safe || '.'}`;
+            if (listEl) listEl.innerHTML = '<div class="ow-pre">Loading...</div>';
+
+            try {
+                const response = await fetch(`/v1/overwatch/fs/ls?rel_path=${encodeURIComponent(safe)}&max_entries=800`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    if (listEl) listEl.innerHTML = `<div class="ow-pre">Failed to list: ${data.error || data.detail || response.status}</div>`;
+                    overwatchState.browseListing = null;
+                    return;
+                }
+                overwatchState.browseListing = data;
+                renderOverwatchBrowseList();
+            } catch (e) {
+                console.error('Browse ls error:', e);
+                if (listEl) listEl.innerHTML = '<div class="ow-pre">Error listing directory</div>';
+            }
+        }
+
+        function renderOverwatchBrowseList() {
+            const listEl = document.getElementById('ow-browse-list');
+            const data = overwatchState.browseListing;
+            if (!data || !Array.isArray(data.items)) {
+                if (listEl) listEl.innerHTML = '<div class="ow-pre">No listing</div>';
+                return;
+            }
+            if (data.items.length === 0) {
+                if (listEl) listEl.innerHTML = '<div class="ow-pre">Empty directory</div>';
+                return;
+            }
+
+            const html = data.items.map(item => {
+                const rel = String(item.rel_path || '').replace(/'/g, "\\'");
+                const name = String(item.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const isDir = !!item.is_dir;
+                const typeLabel = isDir ? 'DIR' : 'FILE';
+                const size = typeof item.size_bytes === 'number' ? `${item.size_bytes} B` : '—';
+                const mod = item.modified_at ? String(item.modified_at).slice(0, 19) : '—';
+
+                const openBtn = isDir
+                    ? `<button class="btn btn-secondary ow-mini" onclick="loadOverwatchBrowseDir('${rel}')">Open</button>`
+                    : `<button class="btn btn-secondary ow-mini" onclick="loadOverwatchBrowseFile('${rel}')">Preview</button>`;
+
+                return `
+                    <div class="card" style="margin-bottom: 0.5rem; padding: 0.85rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+                            <div style="min-width:0;">
+                                <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700;">${isDir ? '📁' : '📄'} ${name}</div>
+                                <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">${typeLabel} • ${size} • ${mod}</div>
+                                <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.15rem; font-family:'JetBrains Mono', monospace;">${rel}</div>
+                            </div>
+                            <div class="ow-inline-actions" style="flex: 0 0 auto;">${openBtn}<button class="btn btn-secondary ow-mini" onclick="copyText('${rel}')">Copy</button></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (listEl) listEl.innerHTML = html;
+        }
+
+        async function loadOverwatchBrowseFile(relPath) {
+            if (!token) return;
+
+            const safe = _normalizeRelPath(relPath);
+            overwatchState.browseSelectedRelPath = safe;
+
+            const metaEl = document.getElementById('ow-browse-meta');
+            const contentEl = document.getElementById('ow-browse-content');
+            if (metaEl) metaEl.textContent = safe ? `Loading: ${safe}` : 'Loading...';
+            if (contentEl) contentEl.textContent = 'Loading...';
+
+            try {
+                const response = await fetch(`/v1/overwatch/fs/read?rel_path=${encodeURIComponent(safe)}&include_content=true&max_bytes=400000`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    if (metaEl) metaEl.textContent = safe;
+                    if (contentEl) contentEl.textContent = data.error || data.detail || 'Failed to read file';
+                    overwatchState.browseSelected = null;
+                    return;
+                }
+                overwatchState.browseSelected = data;
+
+                const size = typeof data.size_bytes === 'number' ? `${data.size_bytes} B` : '—';
+                const mod = data.modified_at ? String(data.modified_at).slice(0, 19) : '—';
+                const ct = data.content_type || '—';
+                if (metaEl) metaEl.textContent = `${safe} • ${size} • ${mod} • ${ct}`;
+
+                let content = data.content;
+                if (content && typeof content === 'object') {
+                    content = JSON.stringify(content, null, 2);
+                }
+                if (contentEl) contentEl.textContent = content || '';
+            } catch (e) {
+                console.error('Browse read error:', e);
+                if (metaEl) metaEl.textContent = safe;
+                if (contentEl) contentEl.textContent = 'Error reading file';
+            }
+        }
+
+        async function openOverwatchRelPath(relPath) {
+            const safe = _normalizeRelPath(relPath);
+            const parent = _parentRelPath(safe);
+            await loadOverwatchBrowseDir(parent);
+            await loadOverwatchBrowseFile(safe);
+        }
+
+        async function refreshOverwatchBrowse() {
+            if (!token) return;
+            await loadOverwatchBrowseDir(overwatchState.browseCwd || '');
+            if (overwatchState.browseSelectedRelPath) {
+                await loadOverwatchBrowseFile(overwatchState.browseSelectedRelPath);
+            }
+        }
+
+        function overwatchBrowseHome() {
+            overwatchState.browseCwd = '';
+            overwatchState.browseListing = null;
+            loadOverwatchBrowseDir('');
+        }
+
+        function overwatchBrowseUp() {
+            const parent = _parentRelPath(overwatchState.browseCwd || '');
+            overwatchState.browseListing = null;
+            loadOverwatchBrowseDir(parent);
+        }
+
+        function copyOverwatchSelectedRelPath() {
+            const rel = overwatchState.browseSelectedRelPath;
+            if (!rel) {
+                alert('No file selected');
+                return;
+            }
+            copyText(rel);
+        }
+
+        function copyOverwatchSelectedAbsPath() {
+            const p = overwatchState.browseSelected && overwatchState.browseSelected.path;
+            if (!p) {
+                alert('No path available');
+                return;
+            }
+            copyText(p);
+        }
+
+        function openOverwatchSelectedFile() {
+            const p = overwatchState.browseSelected && overwatchState.browseSelected.path;
+            if (!p) {
+                alert('No file selected');
+                return;
+            }
+            openFilePath(p);
+        }
+
+        function badgeForStatusText(text) {
+            const t = (text || '').toUpperCase();
+            if (t.includes('VERIFIED') || t.includes('OK') || t === 'OPEN') return 'ok';
+            if (t.includes('UNVERIFIED') || t.includes('PROTOTYPE') || t.includes('CLAIMED')) return 'warn';
+            if (t.includes('ARCHIVE') || t.includes('FAILED') || t.includes('ERROR') || t.includes('DONE')) return 'err';
+            return '';
+        }
+
+        function cleanCellText(cell) {
+            if (!cell) return '';
+            return String(cell).replace(/`/g, '').trim();
+        }
+
+        function toFileUrl(path) {
+            if (!path) return null;
+            const normalized = String(path).replace(/\\/g, '/');
+            return 'file://' + encodeURI(normalized);
+        }
+
+        async function copyText(text) {
+            try {
+                await navigator.clipboard.writeText(text);
+            } catch (e) {
+                console.warn('Clipboard failed:', e);
+                alert('Clipboard copy failed');
+            }
+        }
+
+        function openFilePath(path) {
+            const url = toFileUrl(path);
+            if (!url) return;
+            window.open(url, '_blank');
+        }
+
+        async function loadOverwatchHealth() {
+            if (!token) {
+                overwatchState.health = null;
+                overwatchState.root = null;
+                overwatchState.summary = null;
+                overwatchState.activity = null;
+                overwatchState.protocolScorecards = null;
+                overwatchState.chat = null;
+                document.getElementById('ow-root').textContent = 'Root: — (connect first)';
+                document.getElementById('ow-writes').textContent = 'Writes: — (connect first)';
+                return;
+            }
+
+            try {
+                const response = await fetch('/v1/overwatch/health', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) {
+                    overwatchState.health = null;
+                    document.getElementById('ow-root').textContent = 'Root: — (bridge unavailable)';
+                    return;
+                }
+                const data = await response.json();
+                overwatchState.health = data;
+                overwatchState.root = data.root;
+                const ok = data.ok ? 'ok' : 'err';
+                document.getElementById('ow-root').innerHTML = `Root: <span class="ow-badge ${ok}">${data.root}</span>`;
+                renderOverwatchWriteCaps(data.writes);
+            } catch (error) {
+                console.error('Overwatch health error:', error);
+                overwatchState.health = null;
+                document.getElementById('ow-root').textContent = 'Root: — (error)';
+                document.getElementById('ow-writes').textContent = 'Writes: — (error)';
+            }
+        }
+
+        async function loadOverwatchSummary() {
+            if (!token) return;
+            const el = document.getElementById('ow-summary');
+            if (el) el.innerHTML = '<div class="ow-pre">Loading...</div>';
+            try {
+                const response = await fetch('/v1/overwatch/summary', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    overwatchState.summary = null;
+                    if (el) el.innerHTML = `<div class="ow-pre">Failed to load: ${data.error || data.detail || response.status}</div>`;
+                    return;
+                }
+                overwatchState.summary = data;
+                renderOverwatchSummary();
+            } catch (e) {
+                console.error('Summary error:', e);
+                overwatchState.summary = null;
+                if (el) el.innerHTML = '<div class="ow-pre">Error loading summary</div>';
+            }
+        }
+
+        function renderOverwatchSummary() {
+            const el = document.getElementById('ow-summary');
+            const data = overwatchState.summary;
+            if (!el) return;
+            if (!data) {
+                el.innerHTML = '<div class="ow-pre">No summary</div>';
+                return;
+            }
+
+            const docs = data.docs || {};
+            const docsItems = Array.isArray(docs.items) ? docs.items : [];
+            const tasks = data.tasks || {};
+            const byStatus = tasks.by_status || {};
+            const checkIns = data.check_ins || {};
+            const latest = checkIns.latest || null;
+
+            const statusBadges = Object.keys(byStatus).sort().map(k => {
+                const badge = badgeForStatusText(k);
+                const count = byStatus[k];
+                return `<span class="ow-badge ${badge}" style="margin-right:0.35rem;">${k}: ${count}</span>`;
+            }).join('') || '<span class="ow-badge">No task statuses</span>';
+
+            const docsHtml = docsItems.map(d => {
+                const docId = d.doc_id;
+                const title = d.title || docId;
+                const exists = !!d.exists;
+                const badge = exists ? 'ok' : 'err';
+                const openBtn = docId
+                    ? `<button class="btn btn-secondary ow-mini" onclick="openOverwatchDoc('${String(docId).replace(/'/g, "\\'")}')">Open</button>`
+                    : (d.rel_path ? `<button class="btn btn-secondary ow-mini" onclick="setOverwatchTab('browse'); openOverwatchRelPath('${String(d.rel_path).replace(/'/g, "\\'")}');">Open</button>` : '');
+                return `
+                    <div class="card" style="margin-bottom: 0.6rem; padding: 1rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+                            <div style="min-width:0;">
+                                <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700;">${title}</div>
+                                <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top:0.25rem;">${d.rel_path || ''}</div>
+                            </div>
+                            <span class="ow-badge ${badge}">${exists ? 'OK' : 'MISSING'}</span>
+                        </div>
+                        <div class="ow-inline-actions" style="margin-top:0.6rem;">${openBtn}</div>
+                    </div>
+                `;
+            }).join('') || '<div class="ow-pre">No docs</div>';
+
+            el.innerHTML = `
+                <div class="card" style="margin-bottom: 0.75rem; padding: 1.25rem;">
+                    <div style="display:flex; flex-wrap:wrap; gap:0.75rem; justify-content:space-between; align-items:flex-start;">
+                        <div>
+                            <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700;">Overwatch Summary</div>
+                            <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top:0.35rem;">generated_at: ${data.generated_at || '—'}</div>
+                        </div>
+                        <div class="ow-inline-actions">
+                            <button class="btn btn-secondary ow-mini" onclick="refreshOverwatch()">Sync</button>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; display:flex; flex-wrap:wrap; gap:0.6rem;">
+                        <span class="ow-badge">Docs: ${(docs.available ?? '—')} / ${(docs.total ?? '—')}</span>
+                        <span class="ow-badge">Tasks: ${(tasks.total ?? '—')}</span>
+                        <span class="ow-badge">Check-ins: ${(checkIns.total ?? '—')}</span>
+                    </div>
+                    <div style="margin-top: 1rem;">${statusBadges}</div>
+                    <div style="margin-top: 1rem;">${latest && latest.name ? `<span class=\"ow-badge ok\">Latest check-in: ${latest.name}</span> <button class=\"btn btn-secondary ow-mini\" style=\"margin-left:0.5rem;\" onclick=\"setOverwatchTab('checkins'); selectCheckIn('${String(latest.name).replace(/'/g, "\\'")}');\">Open</button>` : '<span class="ow-badge">No latest check-in</span>'}</div>
+                </div>
+                <div style="font-family: 'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 0.5rem;">Docs index</div>
+                ${docsHtml}
+            `;
+        }
+
+        async function loadOverwatchActivity() {
+            if (!token) return;
+            const el = document.getElementById('ow-activity');
+            if (el) el.innerHTML = '<div class="ow-pre">Loading...</div>';
+
+            let limit = 50;
+            try {
+                const v = parseInt(document.getElementById('ow-activity-limit')?.value || '50', 10);
+                if (!isNaN(v)) limit = v;
+            } catch (e) {}
+
+            try {
+                const response = await fetch(`/v1/overwatch/activity?limit=${encodeURIComponent(limit)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    overwatchState.activity = null;
+                    if (el) el.innerHTML = `<div class="ow-pre">Failed to load: ${data.error || data.detail || response.status}</div>`;
+                    return;
+                }
+                overwatchState.activity = data;
+                renderOverwatchActivity();
+            } catch (e) {
+                console.error('Activity error:', e);
+                overwatchState.activity = null;
+                if (el) el.innerHTML = '<div class="ow-pre">Error loading activity</div>';
+            }
+        }
+
+        function renderOverwatchActivity() {
+            const el = document.getElementById('ow-activity');
+            const data = overwatchState.activity;
+            if (!el) return;
+            const items = data && Array.isArray(data.items) ? data.items : [];
+            if (!items.length) {
+                el.innerHTML = '<div class="ow-pre">No activity</div>';
+                return;
+            }
+
+            const html = items.map(it => {
+                const type = it.type || 'event';
+                const ts = it.ts || '';
+                if (type === 'check_in') {
+                    const name = it.name || '';
+                    const tracking = it.tracking || {};
+                    const agent = tracking.Agent || tracking.agent || '';
+                    const task = tracking.Task || tracking.task || '';
+                    const model = tracking['LLM Model'] || tracking.model || '';
+                    const badge = it.exists ? 'ok' : 'err';
+                    const safeName = String(name).replace(/'/g, "\\'");
+                    return `
+                        <div class="card" style="margin-bottom: 0.75rem; padding: 1rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+                                <div style="min-width:0;">
+                                    <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700;">CHECK-IN: ${name}</div>
+                                    <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">${ts || '—'}${agent ? ` • agent: ${agent}` : ''}${model ? ` • model: ${model}` : ''}</div>
+                                    ${task ? `<div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">task: ${task}</div>` : ''}
+                                </div>
+                                <span class="ow-badge ${badge}">${it.exists ? 'OK' : 'MISSING'}</span>
+                            </div>
+                            <div class="ow-inline-actions" style="margin-top:0.65rem;">
+                                <button class="btn btn-secondary ow-mini" onclick="setOverwatchTab('checkins'); selectCheckIn('${safeName}');">Open</button>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (type === 'task') {
+                    const taskId = it.task_id || '';
+                    const title = it.title || '';
+                    const status = it.status || 'UNKNOWN';
+                    const badge = badgeForStatusText(status);
+                    return `
+                        <div class="card" style="margin-bottom: 0.75rem; padding: 1rem;">
+                            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+                                <div style="min-width:0;">
+                                    <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700;">TASK: ${taskId} — ${title}</div>
+                                    <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">${ts || '—'}</div>
+                                </div>
+                                <span class="ow-badge ${badge}">${status}</span>
+                            </div>
+                            <div class="ow-inline-actions" style="margin-top:0.65rem;">
+                                <button class="btn btn-secondary ow-mini" onclick="openOverwatchDoc('task_inbox')">Open Inbox</button>
+                                <button class="btn btn-secondary ow-mini" onclick="setOverwatchTab('tasks'); loadOverwatchTaskInbox();">View Tasks</button>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="card" style="margin-bottom: 0.75rem; padding: 1rem;">
+                        <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700;">${type.toUpperCase()}</div>
+                        <div class="ow-pre" style="margin-top:0.6rem; max-height: 240px;">${JSON.stringify(it, null, 2)}</div>
+                    </div>
+                `;
+            }).join('');
+
+            el.innerHTML = html;
+        }
+
+        async function loadOverwatchProtocolScorecards() {
+            if (!token) return;
+            const el = document.getElementById('ow-protocol-scorecards');
+            if (el) el.innerHTML = '<div class="ow-pre">Loading...</div>';
+
+            let maxFiles = 250;
+            try {
+                const v = parseInt(document.getElementById('ow-protocol-max-files')?.value || '250', 10);
+                if (!isNaN(v)) maxFiles = v;
+            } catch (e) {}
+
+            try {
+                const response = await fetch(`/v1/overwatch/protocol_scorecards?max_files=${encodeURIComponent(maxFiles)}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    overwatchState.protocolScorecards = null;
+                    if (el) el.innerHTML = `<div class="ow-pre">Failed to load: ${data.error || data.detail || response.status}</div>`;
+                    return;
+                }
+                overwatchState.protocolScorecards = data;
+                renderOverwatchProtocolScorecards();
+            } catch (e) {
+                console.error('Protocol scorecards error:', e);
+                overwatchState.protocolScorecards = null;
+                if (el) el.innerHTML = '<div class="ow-pre">Error loading scorecards</div>';
+            }
+        }
+
+        function renderOverwatchProtocolScorecards() {
+            const el = document.getElementById('ow-protocol-scorecards');
+            const data = overwatchState.protocolScorecards;
+            if (!el) return;
+            if (!data || !Array.isArray(data.items)) {
+                el.innerHTML = '<div class="ow-pre">No scorecards</div>';
+                return;
+            }
+
+            const filter = (document.getElementById('ow-protocol-filter')?.value || '').trim().toLowerCase();
+            let items = data.items;
+            if (filter) {
+                items = items.filter(it => {
+                    const hay = JSON.stringify(it).toLowerCase();
+                    return hay.includes(filter);
+                });
+            }
+
+            const counts = data.counts || {};
+            const header = `
+                <div class="card" style="margin-bottom: 0.75rem; padding: 1.25rem;">
+                    <div style="display:flex; flex-wrap:wrap; gap:0.6rem;">
+                        <span class="ow-badge">Total: ${counts.total ?? '—'}</span>
+                        <span class="ow-badge ok">Fresh: ${counts.fresh ?? '—'}</span>
+                        <span class="ow-badge warn">Recent: ${counts.recent ?? '—'}</span>
+                        <span class="ow-badge warn">Stale: ${counts.stale ?? '—'}</span>
+                        <span class="ow-badge err">Ancient: ${counts.ancient ?? '—'}</span>
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.5rem;">generated_at: ${data.generated_at || '—'}</div>
+                </div>
+            `;
+
+            if (!items.length) {
+                el.innerHTML = header + '<div class="ow-pre">No matching items</div>';
+                return;
+            }
+
+            const rows = items.map(it => {
+                const title = it.title || it.rel_path || it.doc_id || 'doc';
+                const rel = it.rel_path || '';
+                const freshness = (it.freshness || 'unknown').toString();
+                const badge = freshness === 'fresh' ? 'ok' : (freshness === 'recent' ? 'warn' : (freshness === 'stale' ? 'warn' : (freshness === 'ancient' ? 'err' : '')));
+                const age = (it.age_days === null || it.age_days === undefined) ? '—' : `${it.age_days}d`;
+                const mod = it.modified_at ? String(it.modified_at).slice(0, 19) : '—';
+
+                const openBtn = it.doc_id
+                    ? `<button class="btn btn-secondary ow-mini" onclick="openOverwatchDoc('${String(it.doc_id).replace(/'/g, "\\'")}')">Open</button>`
+                    : (rel ? `<button class="btn btn-secondary ow-mini" onclick="setOverwatchTab('browse'); openOverwatchRelPath('${String(rel).replace(/'/g, "\\'")}');">Open</button>` : '');
+
+                const copyRel = rel ? `<button class="btn btn-secondary ow-mini" onclick="copyText('${String(rel).replace(/'/g, "\\'")}')">Copy rel</button>` : '';
+
+                const signals = it.signals || {};
+                const sigBadges = `
+                    <span class="ow-badge ${signals.has_last_updated ? 'ok' : 'warn'}">LAST_UPDATED</span>
+                    <span class="ow-badge ${signals.has_validation ? 'ok' : 'warn'}">VALIDATION</span>
+                `;
+
+                return `
+                    <div class="card" style="margin-bottom: 0.75rem; padding: 1rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+                            <div style="min-width:0;">
+                                <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700;">${title}</div>
+                                <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top:0.25rem;">${rel}</div>
+                            </div>
+                            <div style="text-align:right;">
+                                <span class="ow-badge ${badge}">${freshness.toUpperCase()}</span>
+                                <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top:0.25rem;">${age} • ${mod}</div>
+                            </div>
+                        </div>
+                        <div style="margin-top:0.6rem; display:flex; flex-wrap:wrap; gap:0.35rem;">${sigBadges}</div>
+                        <div class="ow-inline-actions" style="margin-top:0.65rem;">${openBtn}${copyRel}</div>
+                    </div>
+                `;
+            }).join('');
+
+            el.innerHTML = header + rows;
+        }
+
+        function clearOverwatchChat() {
+            overwatchState.chat = null;
+            const ans = document.getElementById('ow-chat-answer');
+            const cites = document.getElementById('ow-chat-citations');
+            if (ans) ans.textContent = 'Ask a question above. (Ctrl/Cmd+Enter to send)';
+            if (cites) cites.innerHTML = '';
+        }
+
+        async function runOverwatchChat() {
+            if (!token) {
+                alert('Connect first');
+                return;
+            }
+
+            const prompt = (document.getElementById('ow-chat-prompt')?.value || '').trim();
+            if (!prompt) return;
+
+            const ans = document.getElementById('ow-chat-answer');
+            const cites = document.getElementById('ow-chat-citations');
+            if (ans) ans.textContent = 'Thinking...';
+            if (cites) cites.innerHTML = '';
+
+            let maxTokens = 300;
+            let temperature = 0.2;
+            try {
+                const v = parseInt(document.getElementById('ow-chat-max-tokens')?.value || '300', 10);
+                if (!isNaN(v)) maxTokens = v;
+            } catch (e) {}
+            try {
+                const v = parseFloat(document.getElementById('ow-chat-temperature')?.value || '0.2');
+                if (!isNaN(v)) temperature = v;
+            } catch (e) {}
+
+            try {
+                const response = await fetch('/v1/overwatch/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ prompt, max_tokens: maxTokens, temperature })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    if (ans) ans.textContent = data.error || data.detail || 'Chat failed';
+                    return;
+                }
+
+                overwatchState.chat = data;
+                renderOverwatchChat();
+            } catch (e) {
+                console.error('Chat error:', e);
+                if (ans) ans.textContent = 'Chat failed.';
+            }
+        }
+
+        function renderOverwatchChat() {
+            const data = overwatchState.chat;
+            const ans = document.getElementById('ow-chat-answer');
+            const cites = document.getElementById('ow-chat-citations');
+            if (!ans || !cites) return;
+            if (!data) {
+                ans.textContent = 'Ask a question above. (Ctrl/Cmd+Enter to send)';
+                cites.innerHTML = '';
+                return;
+            }
+
+            const llada = data.llada || {};
+            const used = !!llada.used;
+            const lladaBadge = used ? 'ok' : 'warn';
+            const lladaText = used ? `LLaDA: used (${llada.base_url || ''})` : `LLaDA: not used (${llada.base_url || ''})`;
+            const lladaErr = llada.error ? `\n${llada.error}` : '';
+            ans.textContent = `${lladaText}${lladaErr}\n\n${data.answer || '(no answer)'}\n`;
+
+            const citations = Array.isArray(data.citations) ? data.citations : [];
+            if (!citations.length) {
+                cites.innerHTML = `<div class="ow-pre">No citations</div>`;
+                return;
+            }
+
+            const html = citations.map(c => {
+                const docId = c.doc_id;
+                const line = c.line;
+                const text = c.text;
+                const title = c.title || docId;
+                const isCheckIn = docId && String(docId).startsWith('check_in:');
+                const checkName = isCheckIn ? String(docId).replace('check_in:', '') : null;
+                const openBtn = isCheckIn
+                    ? `<button class="btn btn-secondary ow-mini" onclick="setOverwatchTab('checkins'); selectCheckIn('${String(checkName).replace(/'/g, "\\'")}');">Open</button>`
+                    : `<button class="btn btn-secondary ow-mini" onclick="openOverwatchDoc('${String(docId).replace(/'/g, "\\'")}')">Open</button>`;
+                return `
+                    <div class="card" style="margin-bottom: 0.6rem; padding: 1rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+                            <div style="min-width:0;">
+                                <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700;">${title}</div>
+                                <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">${docId} : line ${line}</div>
+                            </div>
+                            <div class="ow-inline-actions">${openBtn}<button class="btn btn-secondary ow-mini" onclick="copyText('${String(text).replace(/'/g, "\\'")}')">Copy line</button></div>
+                        </div>
+                        <div class="ow-pre" style="max-height: 200px; margin-top: 0.65rem;">${String(text || '')}</div>
+                    </div>
+                `;
+            }).join('');
+
+            cites.innerHTML = `<div style="margin-bottom: 0.5rem;"><span class="ow-badge ${lladaBadge}">CITATIONS</span></div>` + html;
+        }
+
+        function renderOverwatchWriteCaps(writes) {
+            const el = document.getElementById('ow-writes');
+            if (!el) return;
+            if (!writes) {
+                el.textContent = 'Writes: —';
+                return;
+            }
+            const enabled = writes.enabled ? 'ok' : 'err';
+            const tasks = writes.task_inbox ? 'ok' : 'err';
+            const checkins = writes.check_ins ? 'ok' : 'err';
+            const artifacts = writes.artifacts ? 'ok' : 'err';
+
+            el.innerHTML = `Writes: <span class="ow-badge ${enabled}">${writes.enabled ? 'ENABLED' : 'DISABLED'}</span>
+                <span class="ow-badge ${tasks}" style="margin-left:0.35rem;">TASKS</span>
+                <span class="ow-badge ${checkins}" style="margin-left:0.35rem;">CHECK-INS</span>
+                <span class="ow-badge ${artifacts}" style="margin-left:0.35rem;">ARTIFACTS</span>`;
+
+            const allowTaskCompose = !!writes.task_inbox;
+            const allowCheckinCompose = !!writes.check_ins;
+            const allowArtifacts = !!writes.artifacts;
+            const taskBtn = document.querySelector('#ow-panel-tasks button[onclick^="toggleOverwatchTaskCompose"]');
+            const checkBtn = document.querySelector('#ow-panel-checkins button[onclick^="toggleOverwatchCheckInCompose"]');
+            const snapshotBtn = document.querySelector('button[onclick="saveOverwatchSnapshot()"]');
+            if (taskBtn) taskBtn.disabled = !allowTaskCompose;
+            if (checkBtn) checkBtn.disabled = !allowCheckinCompose;
+            if (snapshotBtn) snapshotBtn.disabled = !allowArtifacts;
+
+            if (!allowTaskCompose) {
+                toggleOverwatchTaskCompose(false);
+            }
+            if (!allowCheckinCompose) {
+                toggleOverwatchCheckInCompose(false);
+            }
+        }
+
+        function toggleOverwatchTaskCompose(show) {
+            const el = document.getElementById('ow-task-compose');
+            if (!el) return;
+            const next = typeof show === 'boolean' ? show : (el.style.display === 'none' || !el.style.display);
+            el.style.display = next ? 'block' : 'none';
+            if (next) {
+                const preview = document.getElementById('ow-task-compose-preview');
+                if (preview) preview.textContent = 'Preview will appear here.';
+            }
+        }
+
+        function readOverwatchNewTaskForm() {
+            return {
+                title: document.getElementById('ow-new-task-title')?.value || '',
+                repo: document.getElementById('ow-new-task-repo')?.value || '',
+                target_agent: document.getElementById('ow-new-task-target')?.value || 'ANY',
+                requested_by: document.getElementById('ow-new-task-requested')?.value || '',
+                timebox: document.getElementById('ow-new-task-timebox')?.value || '',
+                files: document.getElementById('ow-new-task-files')?.value || 'n/a',
+                goal: document.getElementById('ow-new-task-goal')?.value || '',
+                validation: document.getElementById('ow-new-task-validation')?.value || 'n/a',
+                definition_of_done: document.getElementById('ow-new-task-dod')?.value || '',
+            };
+        }
+
+        async function previewOverwatchNewTask() {
+            if (!token) return;
+            const previewEl = document.getElementById('ow-task-compose-preview');
+            if (previewEl) previewEl.textContent = 'Previewing...';
+            try {
+                const payload = { ...readOverwatchNewTaskForm(), dry_run: true };
+                const response = await fetch('/v1/overwatch/write/task_inbox', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    if (previewEl) previewEl.textContent = data.error || data.detail || JSON.stringify(data, null, 2);
+                    return;
+                }
+                if (previewEl) previewEl.textContent = data.entry_markdown || JSON.stringify(data, null, 2);
+            } catch (e) {
+                console.error('Preview task error:', e);
+                if (previewEl) previewEl.textContent = 'Preview failed.';
+            }
+        }
+
+        async function createOverwatchNewTask() {
+            if (!token) return;
+            if (!confirm('Create a new TASK_INBOX entry? (env-gated)')) return;
+            const previewEl = document.getElementById('ow-task-compose-preview');
+            if (previewEl) previewEl.textContent = 'Creating...';
+            try {
+                const payload = { ...readOverwatchNewTaskForm(), dry_run: false };
+                const response = await fetch('/v1/overwatch/write/task_inbox', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    if (previewEl) previewEl.textContent = data.error || data.detail || JSON.stringify(data, null, 2);
+                    return;
+                }
+                if (previewEl) previewEl.textContent = `Created: ${data.task_id}\n${data.path}`;
+                await loadOverwatchTaskInbox();
+            } catch (e) {
+                console.error('Create task error:', e);
+                if (previewEl) previewEl.textContent = 'Create failed.';
+            }
+        }
+
+        function toggleOverwatchCheckInCompose(show) {
+            const el = document.getElementById('ow-checkin-compose');
+            if (!el) return;
+            const next = typeof show === 'boolean' ? show : (el.style.display === 'none' || !el.style.display);
+            el.style.display = next ? 'block' : 'none';
+            if (next) {
+                const preview = document.getElementById('ow-checkin-compose-preview');
+                if (preview) preview.textContent = 'Preview will appear here.';
+            }
+        }
+
+        async function previewOverwatchCheckInStub() {
+            if (!token) return;
+            const topic = document.getElementById('ow-new-checkin-topic')?.value || '';
+            const previewEl = document.getElementById('ow-checkin-compose-preview');
+            if (previewEl) previewEl.textContent = 'Previewing...';
+            try {
+                const response = await fetch('/v1/overwatch/write/check_in_stub', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ topic, dry_run: true })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    if (previewEl) previewEl.textContent = data.error || data.detail || JSON.stringify(data, null, 2);
+                    return;
+                }
+                if (previewEl) previewEl.textContent = data.content || `Will create: ${data.name}`;
+            } catch (e) {
+                console.error('Preview check-in stub error:', e);
+                if (previewEl) previewEl.textContent = 'Preview failed.';
+            }
+        }
+
+        async function createOverwatchCheckInStub() {
+            if (!token) return;
+            const topic = document.getElementById('ow-new-checkin-topic')?.value || '';
+            if (!topic.trim()) {
+                alert('Topic is required');
+                return;
+            }
+            if (!confirm('Create a new check-in stub at Overwatch root? (env-gated)')) return;
+
+            const previewEl = document.getElementById('ow-checkin-compose-preview');
+            if (previewEl) previewEl.textContent = 'Creating...';
+            try {
+                const response = await fetch('/v1/overwatch/write/check_in_stub', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ topic, dry_run: false })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    if (previewEl) previewEl.textContent = data.error || data.detail || JSON.stringify(data, null, 2);
+                    return;
+                }
+                if (previewEl) previewEl.textContent = `Created: ${data.name}\n${data.path}`;
+                await loadOverwatchCheckIns();
+                if (data.path) openFilePath(data.path);
+            } catch (e) {
+                console.error('Create check-in stub error:', e);
+                if (previewEl) previewEl.textContent = 'Create failed.';
+            }
+        }
+
+        async function saveOverwatchSnapshot() {
+            if (!token) {
+                alert('Connect first');
+                return;
+            }
+            const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+            const rel = `snapshots/overwatch_snapshot__${stamp}.json`;
+            const payload = {
+                rel_path: rel,
+                content: {
+                    captured_at: new Date().toISOString(),
+                    overwatch: overwatchState.health || null,
+                    status_board: overwatchState.statusBoard || null,
+                    task_inbox: overwatchState.taskInbox || null,
+                    test_cards: overwatchState.testCards || null,
+                    check_ins: overwatchState.checkIns || null,
+                },
+                dry_run: false
+            };
+            try {
+                const response = await fetch('/v1/overwatch/write/artifact', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    alert(data.error || data.detail || 'Failed to save snapshot');
+                    return;
+                }
+                alert(`Snapshot saved:\n${data.path}`);
+            } catch (e) {
+                console.error('Save snapshot error:', e);
+                alert('Failed to save snapshot');
+            }
+        }
+
+        async function loadOverwatchStatusBoard() {
+            if (!token) return;
+
+            const coreEl = document.getElementById('ow-status-core');
+            const protoEl = document.getElementById('ow-status-proto');
+            if (coreEl) coreEl.innerHTML = '<div class="ow-pre">Loading...</div>';
+            if (protoEl) protoEl.innerHTML = '<div class="ow-pre">Loading...</div>';
+
+            try {
+                const response = await fetch('/v1/overwatch/status_board', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) {
+                    const msg = await response.text();
+                    if (coreEl) coreEl.innerHTML = `<div class="ow-pre">Failed to load: ${msg}</div>`;
+                    if (protoEl) protoEl.innerHTML = `<div class="ow-pre">Failed to load: ${msg}</div>`;
+                    return;
+                }
+                overwatchState.statusBoard = await response.json();
+                renderOverwatchStatusBoard();
+            } catch (error) {
+                console.error('Status board error:', error);
+                if (coreEl) coreEl.innerHTML = '<div class="ow-pre">Error loading status board</div>';
+                if (protoEl) protoEl.innerHTML = '<div class="ow-pre">Error loading status board</div>';
+            }
+        }
+
+        function renderStatusTable(rows) {
+            if (!Array.isArray(rows) || rows.length === 0) {
+                return '<div class="ow-pre">No rows</div>';
+            }
+
+            const cols = Object.keys(rows[0]);
+            const head = cols.map(c => `<th>${c}</th>`).join('');
+            const body = rows.map(r => {
+                return `<tr>${cols.map(c => {
+                    const raw = r[c];
+                    const txt = cleanCellText(raw);
+                    if (c.toLowerCase().includes('status')) {
+                        const badge = badgeForStatusText(txt);
+                        return `<td><span class="ow-badge ${badge}">${txt || '—'}</span></td>`;
+                    }
+                    if (c.toLowerCase().includes('runbook')) {
+                        const v = txt;
+                        const abs = overwatchState.root && v ? (overwatchState.root.replace(/\/$/, '') + '/' + v.replace(/^\.\.\//, '')) : null;
+                        const link = abs ? `<button class="btn btn-secondary ow-mini" onclick="openFilePath('${abs.replace(/'/g, "\\'")}')">Open</button>` : '';
+                        const copy = abs ? `<button class="btn btn-secondary ow-mini" onclick="copyText('${abs.replace(/'/g, "\\'")}')">Copy</button>` : '';
+                        return `<td>${v ? `<div style="font-family:'JetBrains Mono', monospace; font-size:0.8rem; color:var(--text-primary);">${v}</div>` : '—'}<div class="ow-inline-actions" style="margin-top:0.35rem;">${link}${copy}</div></td>`;
+                    }
+                    return `<td>${txt || '—'}</td>`;
+                }).join('')}</tr>`;
+            }).join('');
+
+            return `<table class="ow-table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+        }
+
+        function renderOverwatchStatusBoard() {
+            const data = overwatchState.statusBoard;
+            if (!data || !data.tables) return;
+            const core = data.tables.core_services || [];
+            const proto = data.tables.prototypes || [];
+
+            const coreEl = document.getElementById('ow-status-core');
+            const protoEl = document.getElementById('ow-status-proto');
+            if (coreEl) coreEl.innerHTML = renderStatusTable(core);
+            if (protoEl) protoEl.innerHTML = renderStatusTable(proto);
+        }
+
+        async function loadOverwatchTaskInbox() {
+            if (!token) return;
+            const tasksEl = document.getElementById('ow-tasks');
+            if (tasksEl) tasksEl.innerHTML = '<div class="ow-pre">Loading...</div>';
+
+            try {
+                const response = await fetch('/v1/overwatch/task_inbox', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) {
+                    const msg = await response.text();
+                    if (tasksEl) tasksEl.innerHTML = `<div class="ow-pre">Failed to load: ${msg}</div>`;
+                    return;
+                }
+                overwatchState.taskInbox = await response.json();
+                renderOverwatchTasks();
+            } catch (error) {
+                console.error('Task inbox error:', error);
+                if (tasksEl) tasksEl.innerHTML = '<div class="ow-pre">Error loading task inbox</div>';
+            }
+        }
+
+        function renderOverwatchTasks() {
+            const tasksEl = document.getElementById('ow-tasks');
+            const filter = (document.getElementById('ow-task-filter')?.value || '').trim().toLowerCase();
+            const data = overwatchState.taskInbox;
+
+            if (!data || !Array.isArray(data.tasks)) {
+                if (tasksEl) tasksEl.innerHTML = '<div class="ow-pre">No task data</div>';
+                return;
+            }
+
+            let tasks = data.tasks;
+            if (filter) {
+                tasks = tasks.filter(t => {
+                    const hay = JSON.stringify(t).toLowerCase();
+                    return hay.includes(filter);
+                });
+            }
+
+            if (tasks.length === 0) {
+                if (tasksEl) tasksEl.innerHTML = '<div class="ow-pre">No matching tasks</div>';
+                return;
+            }
+
+            const html = tasks.map(t => {
+                const status = t.status || 'UNKNOWN';
+                const badge = badgeForStatusText(status);
+                const repo = (t.fields && (t.fields.Repo || t.fields.repo)) ? (t.fields.Repo || t.fields.repo) : '';
+                const validation = (t.fields && (t.fields.Validation || t.fields.validation)) ? (t.fields.Validation || t.fields.validation) : '';
+
+                const title = `${t.task_id} — ${t.title}`;
+                return `
+                    <div class="card" style="margin-bottom: 1rem;">
+                        <div class="card-header">
+                            <div class="card-title" style="font-size: 0.95rem; font-family: 'JetBrains Mono', monospace;">${title}</div>
+                            <div class="ow-badge ${badge}">${status}</div>
+                        </div>
+                        <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                            <div style="flex:1 1 320px;">
+                                ${repo ? `<div class="detail-item"><span class="detail-label">Repo:</span><span class="detail-value" style="font-size:0.85rem;">${repo}</span></div>` : ''}
+                                <div class="ow-pre" style="max-height: 240px; margin-top:0.75rem;">${t.raw || ''}</div>
+                            </div>
+                            <div style="flex:1 1 320px;">
+                                ${validation ? `<div class="detail-item"><span class="detail-label">Validation:</span><span class="detail-value" style="font-size:0.85rem;">${''}</span></div><div class="ow-pre" style="max-height: 240px;">${validation}</div>` : '<div class="ow-pre" style="max-height: 240px;">No validation block.</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (tasksEl) tasksEl.innerHTML = html;
+        }
+
+        async function loadOverwatchTestCards() {
+            if (!token) return;
+            const cardsEl = document.getElementById('ow-cards');
+            if (cardsEl) cardsEl.innerHTML = '<div class="ow-pre">Loading...</div>';
+
+            try {
+                const response = await fetch('/v1/overwatch/test_cards', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) {
+                    const msg = await response.text();
+                    if (cardsEl) cardsEl.innerHTML = `<div class="ow-pre">Failed to load: ${msg}</div>`;
+                    return;
+                }
+                overwatchState.testCards = await response.json();
+                renderOverwatchCards();
+            } catch (error) {
+                console.error('Test cards error:', error);
+                if (cardsEl) cardsEl.innerHTML = '<div class="ow-pre">Error loading test cards</div>';
+            }
+        }
+
+        function renderOverwatchCards() {
+            const cardsEl = document.getElementById('ow-cards');
+            const filter = (document.getElementById('ow-card-filter')?.value || '').trim().toLowerCase();
+            const data = overwatchState.testCards;
+
+            const items = data && data.items && data.items.content ? data.items.content : null;
+            if (!Array.isArray(items)) {
+                if (cardsEl) cardsEl.innerHTML = '<div class="ow-pre">No deck items</div>';
+                return;
+            }
+
+            let filtered = items;
+            if (filter) {
+                filtered = items.filter(it => {
+                    const hay = JSON.stringify(it).toLowerCase();
+                    return hay.includes(filter);
+                });
+            }
+
+            if (filtered.length === 0) {
+                if (cardsEl) cardsEl.innerHTML = '<div class="ow-pre">No matching cards</div>';
+                return;
+            }
+
+            const html = filtered.map(it => {
+                const title = it.title || it.id || 'Card';
+                const subtitle = it.subtitle || '';
+                const bundle = it.bundle || {};
+                const minRuns = bundle.inputs && Array.isArray(bundle.inputs.minRuns) ? bundle.inputs.minRuns : [];
+                const source = bundle.outputs ? bundle.outputs.source : null;
+                const tags = bundle.outputs && Array.isArray(bundle.outputs.tags) ? bundle.outputs.tags : [];
+
+                return `
+                    <div class="card" style="margin-bottom: 1rem;">
+                        <div class="card-header">
+                            <div>
+                                <div class="card-title" style="font-family:'JetBrains Mono', monospace; font-size: 0.95rem;">${title}</div>
+                                ${subtitle ? `<div style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.25rem;">${subtitle}</div>` : ''}
+                            </div>
+                            <div class="ow-badge">${it.id || ''}</div>
+                        </div>
+                        ${tags.length ? `<div style="display:flex; flex-wrap:wrap; gap:0.4rem; margin-bottom: 0.75rem;">${tags.map(t => `<span class="ow-badge">${t}</span>`).join('')}</div>` : ''}
+                        <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+                            <div style="flex:1 1 360px;">
+                                <div style="font-family:'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom:0.5rem;">Minimum run</div>
+                                ${minRuns.length ? minRuns.map(r => {
+                                    const cmd = r.cmd || '';
+                                    const cwd = r.cwd || '';
+                                    const name = r.name || 'Run';
+                                    const copyCmd = cmd ? `<button class="btn btn-secondary ow-mini" onclick="copyText('${cmd.replace(/'/g, "\\'")}')">Copy cmd</button>` : '';
+                                    const copyCwd = cwd ? `<button class="btn btn-secondary ow-mini" onclick="copyText('${cwd.replace(/'/g, "\\'")}')">Copy cwd</button>` : '';
+                                    return `<div style="margin-bottom:0.75rem;">
+                                        <div style="color: var(--text-primary); font-weight: 700; font-size:0.85rem;">${name}</div>
+                                        ${cwd ? `<div style="color: var(--text-secondary); font-size:0.75rem; margin-top:0.25rem;">cwd: <span style="font-family:'JetBrains Mono', monospace; color: var(--text-primary);">${cwd}</span></div>` : ''}
+                                        ${cmd ? `<div class="ow-pre" style="max-height: 140px; margin-top:0.35rem;">${cmd}</div>` : ''}
+                                        <div class="ow-inline-actions" style="margin-top:0.35rem;">${copyCmd}${copyCwd}</div>
+                                    </div>`;
+                                }).join('') : '<div class="ow-pre" style="max-height: 140px;">No minRuns in deck item.</div>'}
+                            </div>
+                            <div style="flex:1 1 360px;">
+                                <div style="font-family:'JetBrains Mono', monospace; color: var(--text-secondary); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom:0.5rem;">Source</div>
+                                ${source ? `<div class="ow-pre" style="max-height: 140px;">${source}</div>
+                                <div class="ow-inline-actions" style="margin-top:0.35rem;">
+                                    <button class="btn btn-secondary ow-mini" onclick="copyText('${String(source).replace(/'/g, "\\'")}')">Copy</button>
+                                    <button class="btn btn-secondary ow-mini" onclick="openFilePath('${String(source).replace(/'/g, "\\'")}')">Open</button>
+                                </div>` : '<div class="ow-pre" style="max-height: 140px;">No source field.</div>'}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (cardsEl) cardsEl.innerHTML = html;
+        }
+
+        async function loadOverwatchCheckIns() {
+            if (!token) return;
+            const listEl = document.getElementById('ow-checkins');
+            if (listEl) listEl.innerHTML = '<div class="ow-pre">Loading...</div>';
+
+            try {
+                const response = await fetch('/v1/overwatch/check_ins?limit=40', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) {
+                    const msg = await response.text();
+                    if (listEl) listEl.innerHTML = `<div class="ow-pre">Failed to load: ${msg}</div>`;
+                    return;
+                }
+                overwatchState.checkIns = await response.json();
+                renderOverwatchCheckIns();
+            } catch (error) {
+                console.error('Check-ins error:', error);
+                if (listEl) listEl.innerHTML = '<div class="ow-pre">Error loading check-ins</div>';
+            }
+        }
+
+        function renderOverwatchCheckIns() {
+            const listEl = document.getElementById('ow-checkins');
+            const data = overwatchState.checkIns;
+            if (!Array.isArray(data)) {
+                if (listEl) listEl.innerHTML = '<div class="ow-pre">No check-ins</div>';
+                return;
+            }
+
+            const html = data.map(ci => {
+                const name = ci.name;
+                const path = ci.path;
+                const mod = ci.modified_at ? new Date(ci.modified_at).toLocaleString() : '';
+                const exists = ci.exists;
+                const badge = exists ? 'ok' : 'err';
+                return `
+                    <div class="card" style="margin-bottom: 0.75rem; padding: 1rem;">
+                        <div style="display:flex; justify-content:space-between; gap:0.75rem; align-items:flex-start;">
+                            <div>
+                                <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700;">${name}</div>
+                                ${mod ? `<div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">${mod}</div>` : ''}
+                            </div>
+                            <span class="ow-badge ${badge}">${exists ? 'OK' : 'MISSING'}</span>
+                        </div>
+                        <div class="ow-inline-actions" style="margin-top:0.75rem;">
+                            <button class="btn btn-secondary ow-mini" onclick="selectCheckIn('${String(name).replace(/'/g, "\\'")}')">View</button>
+                            ${path ? `<button class="btn btn-secondary ow-mini" onclick="copyText('${String(path).replace(/'/g, "\\'")}')">Copy Path</button>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (listEl) listEl.innerHTML = html;
+        }
+
+        async function selectCheckIn(name) {
+            if (!token) return;
+            overwatchState.selectedCheckIn = name;
+            const contentEl = document.getElementById('ow-checkin-content');
+            if (contentEl) contentEl.textContent = 'Loading...';
+            try {
+                const response = await fetch(`/v1/overwatch/check_ins/${encodeURIComponent(name)}?include_content=true`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) {
+                    const msg = await response.text();
+                    if (contentEl) contentEl.textContent = `Failed to load: ${msg}`;
+                    return;
+                }
+                const data = await response.json();
+                if (contentEl) contentEl.textContent = data.content || '';
+            } catch (error) {
+                console.error('Check-in load error:', error);
+                if (contentEl) contentEl.textContent = 'Error loading check-in';
+            }
+        }
+
+        async function runOverwatchSearch() {
+            if (!token) {
+                alert('Connect first');
+                return;
+            }
+            const q = (document.getElementById('ow-search-input').value || '').trim();
+            if (!q) return;
+            const useTree = !!document.getElementById('ow-search-tree')?.checked;
+            const scope = (document.getElementById('ow-search-scope')?.value || '').trim();
+            const resultsEl = document.getElementById('ow-search-results');
+            if (resultsEl) resultsEl.innerHTML = '<div class="ow-pre">Searching...</div>';
+
+            try {
+                const url = useTree
+                    ? `/v1/overwatch/search_tree?q=${encodeURIComponent(q)}&max_results=80&max_files=1200&rel_path=${encodeURIComponent(scope)}`
+                    : `/v1/overwatch/search?q=${encodeURIComponent(q)}&max_results=80`;
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) {
+                    const msg = await response.text();
+                    if (resultsEl) resultsEl.innerHTML = `<div class="ow-pre">Search failed: ${msg}</div>`;
+                    return;
+                }
+                overwatchState.searchResults = await response.json();
+                renderOverwatchSearchResults();
+            } catch (error) {
+                console.error('Search error:', error);
+                if (resultsEl) resultsEl.innerHTML = '<div class="ow-pre">Search error</div>';
+            }
+        }
+
+        function renderOverwatchSearchResults() {
+            const resultsEl = document.getElementById('ow-search-results');
+            const data = overwatchState.searchResults;
+            if (!data || !Array.isArray(data.results)) {
+                if (resultsEl) resultsEl.innerHTML = '<div class="ow-pre">No results</div>';
+                return;
+            }
+            if (data.results.length === 0) {
+                if (resultsEl) resultsEl.innerHTML = '<div class="ow-pre">No matches</div>';
+                return;
+            }
+
+            const html = data.results.map(r => {
+                const isTree = !!r.rel_path;
+                const docId = isTree ? r.rel_path : r.doc_id;
+                const line = r.line;
+                const text = r.text;
+                const title = isTree ? (r.rel_path || 'file') : (r.title || docId);
+                const isCheckIn = !isTree && docId && docId.startsWith('check_in:');
+                const checkName = isCheckIn ? docId.replace('check_in:', '') : null;
+
+                const openBtn = isTree
+                    ? `<button class="btn btn-secondary ow-mini" onclick="setOverwatchTab('browse'); openOverwatchRelPath('${String(r.rel_path).replace(/'/g, "\\'")}');">Open</button>`
+                    : (isCheckIn
+                        ? `<button class="btn btn-secondary ow-mini" onclick="setOverwatchTab('checkins'); selectCheckIn('${String(checkName).replace(/'/g, "\\'")}');">Open</button>`
+                        : `<button class="btn btn-secondary ow-mini" onclick="openOverwatchDoc('${String(docId).replace(/'/g, "\\'")}')">Open</button>`);
+                return `
+                    <div class="card" style="margin-bottom: 0.75rem; padding: 1rem;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem;">
+                            <div>
+                                <div style="font-family:'JetBrains Mono', monospace; font-size:0.85rem; font-weight:700;">${title}</div>
+                                <div style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 0.25rem;">${docId} : line ${line}</div>
+                            </div>
+                            <div class="ow-inline-actions">${openBtn}<button class="btn btn-secondary ow-mini" onclick="copyText('${String(text).replace(/'/g, "\\'")}')">Copy line</button></div>
+                        </div>
+                        <div class="ow-pre" style="max-height: 180px; margin-top: 0.75rem;">${text}</div>
+                    </div>
+                `;
+            }).join('');
+
+            if (resultsEl) resultsEl.innerHTML = html;
+        }
+
+        async function openOverwatchDoc(docId) {
+            if (!token) {
+                alert('Connect first');
+                return;
+            }
+            try {
+                const response = await fetch(`/v1/overwatch/docs/${encodeURIComponent(docId)}?include_content=false`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) {
+                    alert('Doc not available');
+                    return;
+                }
+                const data = await response.json();
+                if (data && data.rel_path) {
+                    setOverwatchTab('browse');
+                    await openOverwatchRelPath(data.rel_path);
+                    return;
+                }
+                if (data && data.path) {
+                    openFilePath(data.path);
+                }
+            } catch (e) {
+                console.error('Open doc failed:', e);
+            }
+        }
+
+        function copyOverwatchRoot() {
+            if (!overwatchState.root) {
+                alert('Overwatch root unknown');
+                return;
+            }
+            copyText(overwatchState.root);
+        }
+
+        function copySelectedCheckInPath() {
+            const name = overwatchState.selectedCheckIn;
+            if (!name || !Array.isArray(overwatchState.checkIns)) {
+                alert('No check-in selected');
+                return;
+            }
+            const found = overwatchState.checkIns.find(ci => ci.name === name);
+            if (!found || !found.path) {
+                alert('No path for selected check-in');
+                return;
+            }
+            copyText(found.path);
+        }
+
+        async function refreshOverwatch() {
+            await loadOverwatchHealth();
+            if (!token) {
+                return;
+            }
+
+            const activeTab = ['browse', 'summary', 'status', 'tasks', 'activity', 'protocols', 'cards', 'checkins', 'search', 'chat'].find(t => document.getElementById(`ow-tab-${t}`)?.classList.contains('active')) || 'status';
+            if (activeTab === 'browse') {
+                await refreshOverwatchBrowse();
+            } else if (activeTab === 'summary') {
+                await loadOverwatchSummary();
+            } else if (activeTab === 'status') {
+                await loadOverwatchStatusBoard();
+            } else if (activeTab === 'tasks') {
+                await loadOverwatchTaskInbox();
+            } else if (activeTab === 'activity') {
+                await loadOverwatchActivity();
+            } else if (activeTab === 'protocols') {
+                await loadOverwatchProtocolScorecards();
+            } else if (activeTab === 'cards') {
+                await loadOverwatchTestCards();
+            } else if (activeTab === 'checkins') {
+                await loadOverwatchCheckIns();
+            }
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Global Keyboard Shortcuts (Gravity UI Escape Protocol)
+            document.addEventListener('keydown', (e) => {
+                const t = e.target;
+                const isTypingTarget = !!(t && (
+                    t.tagName === 'INPUT' ||
+                    t.tagName === 'TEXTAREA' ||
+                    t.tagName === 'SELECT' ||
+                    t.isContentEditable
+                ));
+
+                const launcher = document.getElementById('launcher-modal');
+                const inspector = document.getElementById('node-inspector');
+                const launcherVisible = !!(launcher && window.getComputedStyle(launcher).display !== 'none');
+                const inspectorVisible = !!(inspector && window.getComputedStyle(inspector).display !== 'none');
+
+                if (e.key === 'Escape') {
+                    // Check if a modal is open
+                    
+                    if (launcherVisible) {
+                        e.preventDefault();
+                        closeLauncher();
+                    } else if (inspectorVisible) {
+                        e.preventDefault();
+                        closeInspector();
+                    } else if (!isTypingTarget && currentUiMode !== 'browse') {
+                        e.preventDefault();
+                        setUiMode('browse');
+                    }
+                }
+                
+                // Quick mode switching
+                if (e.altKey && !isTypingTarget) {
+                    if (e.key === '1') {
+                        e.preventDefault();
+                        setUiMode('browse');
+                    }
+                    if (e.key === '2') {
+                        e.preventDefault();
+                        setUiMode('inspect');
+                    }
+                    if (e.key === '3') {
+                        e.preventDefault();
+                        setUiMode('navigate');
+                    }
+                    if (e.key === '4') {
+                        e.preventDefault();
+                        setUiMode('forge');
+                    }
+                    if (e.key === '5') {
+                        e.preventDefault();
+                        setUiMode('compose');
+                    }
+                }
+            });
+
+            if (isLocalDev) {
+                const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+                if (savedToken) {
+                    document.getElementById('token-input').value = savedToken;
+                    token = savedToken;
+                    document.getElementById('token-hint').textContent = 'Token loaded from browser storage';
+                    // Auto-connect on page load
+                    setTimeout(() => connect(), 100);
+                } else {
+                    document.getElementById('token-hint').innerHTML = 'Token location: <code>cat .node_token</code>';
+                }
+            }
+        });
+        
+        function handleTokenInput() {
+            const inputToken = document.getElementById('token-input').value.trim();
+            if (isLocalDev && inputToken) {
+                // Auto-save on every keystroke in dev mode
+                const normalizedToken = inputToken.replace(/^Bearer\s+/i, '');
+                localStorage.setItem(TOKEN_STORAGE_KEY, normalizedToken);
+                document.getElementById('token-hint').textContent = 'Token saved to browser storage';
+            }
+        }
+        
+        async function connect() {
+            const inputToken = document.getElementById('token-input').value.trim();
+            if (!inputToken) {
+                alert('Please enter a bearer token');
+                return;
+            }
+            
+            // Normalize token - strip "Bearer " prefix if present
+            token = inputToken.replace(/^Bearer\s+/i, '');
+            
+            // Save to localStorage on localhost only
+            if (isLocalDev) {
+                localStorage.setItem(TOKEN_STORAGE_KEY, token);
+            }
+            
+            try {
+                const response = await fetch('/v1/capabilities', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    document.getElementById('status-text').textContent = 'Connected';
+                    
+                    if (refreshInterval) clearInterval(refreshInterval);
+                    refreshInterval = setInterval(refreshData, 10000);
+                    
+                    await refreshData();
+                    await loadGraph();
+                } else {
+                    document.getElementById('status-text').textContent = 'Auth Failed';
+                    alert('Authentication failed. Check your token.');
+                }
+            } catch (error) {
+                document.getElementById('status-text').textContent = 'Connection Error';
+                console.error('Connection error:', error);
+            }
+        }
+        
+        async function refreshData() {
+            if (!token) return;
+            
+            try {
+                const response = await fetch('/v1/nodes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    nodes = await response.json();
+                    updateNodesGrid();
+                    updateCounts();
+                    updateGlobalTelemetry();
+                }
+            } catch (error) {
+                console.error('Refresh error:', error);
+            }
+        }
+        
+        function updateGlobalTelemetry() {
+            const activeNodes = nodes.filter(n => n.status === 'online');
+            const totalNodes = nodes.length;
+            
+            // Astros: Truth-safe global indicators
+            const sysValue = document.getElementById('global-sys');
+            const netValue = document.getElementById('global-net');
+            
+            if (totalNodes === 0) {
+                sysValue.textContent = 'UNKNOWN';
+                sysValue.style.color = 'var(--text-secondary)';
+                netValue.textContent = 'DISCONNECTED';
+                netValue.style.color = 'var(--status-error)';
+            } else {
+                const healthyCount = nodes.filter(n => n.health?.status === 'healthy').length;
+                const ratio = healthyCount / totalNodes;
+                
+                if (ratio === 1) {
+                    sysValue.textContent = 'NOMINAL';
+                    sysValue.style.color = 'var(--status-success)';
+                } else if (ratio > 0.5) {
+                    sysValue.textContent = 'DEGRADED';
+                    sysValue.style.color = 'var(--status-warning)';
+                } else {
+                    sysValue.textContent = 'CRITICAL';
+                    sysValue.style.color = 'var(--status-error)';
+                }
+                
+                netValue.textContent = 'CONNECTED';
+                netValue.style.color = 'var(--status-success)';
+            }
+        }
+        
+        function updateCounts() {
+            document.getElementById('node-count').textContent = nodes.length;
+            const active = nodes.filter(n => n.status === 'online').length;
+            document.getElementById('active-count').textContent = active;
+        }
+        
+        function updateNodesGrid() {
+            const grid = document.getElementById('nodes-grid');
+            
+            if (nodes.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1/-1;">
+                        <h3>No nodes discovered</h3>
+                        <p>Click "Discover" to scan for nodes</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Gravity UI: Data Density adjustment
+            const density = currentUiMode === 'inspect' ? 'detailed' : 
+                            currentUiMode === 'navigate' ? 'minimal' : 'normal';
+            
+            grid.innerHTML = nodes.map(node => {
+                const metrics = node.metrics || {};
+                const health = node.health || {};
+                const status = node.status || 'unknown';
+                
+                // Astros: Semantic status colors
+                const cpuColor = metrics.cpu_percent > 80 ? 'critical' : 
+                                metrics.cpu_percent > 60 ? 'warning' : 'blue';
+                
+                const memColor = metrics.memory_percent > 80 ? 'critical' : 
+                               metrics.memory_percent > 60 ? 'warning' : 'blue';
+                
+                // Astros: Truth-safe metric values
+                const cpuVal = metrics.cpu_percent !== undefined ? `${metrics.cpu_percent.toFixed(1)}%` : '—';
+                const memVal = metrics.memory_mb !== undefined ? `${metrics.memory_mb}MB` : '—';
+                
+                return `
+                    <div class="card" style="opacity: var(--hapa-panel-opacity); transition: all var(--hapa-anim-ms) ease-in-out;">
+                        <div class="card-header">
+                            <div class="card-title">${node.display_name || node.node_id}</div>
+                            <div class="card-badge">${node.service_type}</div>
+                        </div>
+                        
+                        <div style="margin-bottom: 1rem;">
+                            <span class="node-status ${status}">${status}</span>
+                            ${density !== 'minimal' && health.message ? `<small style="color: var(--text-secondary); margin-left: 0.5rem;">${health.message}</small>` : ''}
+                        </div>
+
+                        ${density !== 'minimal' ? `
+                        <div class="metrics">
+                            <!-- System Metrics -->
+                            <div class="metric">
+                                <div class="metric-label">CPU</div>
+                                <div class="metric-value">${cpuVal}</div>
+                                ${metrics.cpu_percent !== undefined ? `
+                                <div class="metric-bar">
+                                    <div class="metric-fill ${cpuColor}" style="width: ${Math.min(metrics.cpu_percent, 100)}%"></div>
+                                </div>
+                                ` : ''}
+                            </div>
+                            
+                            <div class="metric">
+                                <div class="metric-label">Memory</div>
+                                <div class="metric-value">${memVal}</div>
+                                ${metrics.memory_percent !== undefined ? `
+                                <div class="metric-bar">
+                                    <div class="metric-fill ${memColor}" style="width: ${Math.min(metrics.memory_percent, 100)}%"></div>
+                                </div>
+                                ` : ''}
+                            </div>
+                            
+                            <!-- Detailed metrics only in Inspect mode (Progressive Reveal) -->
+                            ${density === 'detailed' ? `
+                                <div class="metric">
+                                    <div class="metric-label">Disk</div>
+                                    <div class="metric-value">${metrics.disk_gb !== undefined ? `${metrics.disk_gb}GB (${metrics.disk_percent.toFixed(1)}%)` : '—'}</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">Uptime</div>
+                                    <div class="metric-value">${metrics.uptime_seconds !== undefined ? formatUptime(metrics.uptime_seconds) : '—'}</div>
+                                </div>
+                                <div class="metric">
+                                    <div class="metric-label">Requests/min</div>
+                                    <div class="metric-value">${metrics.requests_per_minute !== undefined ? metrics.requests_per_minute.toFixed(1) : '—'}</div>
+                                </div>
+                            ` : ''}
+
+                            <!-- Queue Metrics -->
+                            ${(metrics.queue_depth !== undefined || metrics.queue_running !== undefined) ? `
+                            <div class="metric">
+                                <div class="metric-label">Queue</div>
+                                <div class="metric-value">
+                                    ${metrics.queue_running || 0} / ${metrics.queue_depth || 0}
+                                </div>
+                            </div>
+                            ` : ''}
+                        </div>
+                        ` : ''}
+
+                        <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+                            <button type="button" class="btn" style="font-size: 0.75rem; padding: 0.35rem 0.7rem;" onclick="viewNode('${node.node_id}')">Inspect</button>
+                            ${density === 'detailed' ? `
+                                <button type="button" class="btn" style="font-size: 0.75rem; padding: 0.35rem 0.7rem; background: var(--accent-purple);" onclick="showNodeLogs('${node.node_id}')">Logs</button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        async function discoverNodes() {
+            if (!token) {
+                alert('Please connect first');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/v1/discovery/scan', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Discovered ${result.discovered} nodes`);
+                    await refreshData();
+                    await loadGraph();
+                }
+            } catch (error) {
+                console.error('Discovery error:', error);
+            }
+        }
+        
+        async function registerNode() {
+            const url = prompt('Enter node URL (e.g., http://127.0.0.1:8085):');
+            if (!url) return;
+            
+            try {
+                const response = await fetch('/v1/discovery/register', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        node_id: url.replace(/https?:\/\//, '').replace(/[/:]/g, '_'),
+                        base_url: url,
+                        service_type: 'api'
+                    })
+                });
+                
+                if (response.ok) {
+                    alert('Node registered successfully');
+                    await refreshData();
+                } else {
+                    alert('Failed to register node');
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                alert('Failed to register node');
+            }
+        }
+        
+        // Launcher functions
+        let currentLogInstance = null;
+        
+        async function showLauncher() {
+            setUiMode('forge');
+        }
+        
+        function closeLauncher() {
+            if (currentUiMode === 'forge') {
+                setUiMode('browse');
+            }
+            currentLogInstance = null;
+            document.getElementById('launch-form').style.display = 'none';
+            document.getElementById('instance-logs').style.display = 'none';
+            const container = document.getElementById('logs-content');
+            if (container) container.textContent = '';
+        }
+        
+        async function loadRegistry() {
+            try {
+                const response = await fetch('/v1/registry/nodes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const registry = await response.json();
+                    const listEl = document.getElementById('registry-list');
+                    
+                    listEl.innerHTML = registry.map(node => `
+                        <div class="node-item">
+                            <div class="node-item-header">
+                                <div class="node-item-title">${node.display_name}</div>
+                                <div class="node-item-type">${node.node_type}</div>
+                            </div>
+                            <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                                <div style="color:var(--text-secondary); font-size:0.75rem;">
+                                    Port: ${node.default_port || 'auto'} | Auth: ${node.auth_type}
+                                </div>
+                                <button class="btn" style="padding:0.35rem 0.75rem; font-size:0.75rem;" onclick="prepareLaunch('${node.node_type}')">
+                                    Launch
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Failed to load registry:', error);
+            }
+        }
+        
+        async function loadInstances() {
+            try {
+                const response = await fetch('/v1/launcher/instances', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    instances = await response.json();
+                    const listEl = document.getElementById('instances-list');
+                    
+                    if (instances.length === 0) {
+                        listEl.innerHTML = '<p style="color:var(--text-secondary); text-align:center; padding:1rem;">No running instances</p>';
+                    } else {
+                        listEl.innerHTML = instances.map(inst => `
+                            <div class="node-item">
+                                <div class="node-item-header">
+                                    <div class="node-item-title">${inst.instance_id}</div>
+                                    <div class="instance-status status-${inst.status.toLowerCase()}">${inst.status}</div>
+                                </div>
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-top:0.5rem;">
+                                    <div style="color:var(--text-secondary); font-size:0.7rem; font-family:'JetBrains Mono', monospace;">
+                                        PID: ${inst.pid || 'N/A'}
+                                    </div>
+                                    <div style="display:flex; gap:0.5rem;">
+                                        <button class="btn btn-secondary" style="padding:0.35rem 0.7rem; font-size:0.7rem;" onclick="showLogs('${inst.instance_id}')">Logs</button>
+                                        <button class="btn" style="padding:0.35rem 0.7rem; font-size:0.7rem; background:var(--status-error); color:white;" onclick="stopInstance('${inst.instance_id}')">Stop</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load instances:', error);
+            }
+        }
+        
+        function prepareLaunch(nodeType) {
+            document.getElementById('launch-type').value = nodeType;
+            document.getElementById('launch-port').value = '';
+            document.getElementById('launch-instance').value = '';
+            document.getElementById('launch-env').value = '';
+            document.getElementById('launch-form').style.display = 'block';
+            document.getElementById('instance-logs').style.display = 'none';
+        }
+        
+        function cancelLaunch() {
+            document.getElementById('launch-form').style.display = 'none';
+        }
+        
+        async function launchNode() {
+            const nodeType = document.getElementById('launch-type').value;
+            const port = document.getElementById('launch-port').value;
+            const instanceId = document.getElementById('launch-instance').value;
+            const envStr = document.getElementById('launch-env').value;
+            
+            const payload = { node_type: nodeType };
+            if (port) payload.port = parseInt(port);
+            if (instanceId) payload.instance_id = instanceId;
+            if (envStr) {
+                const env = {};
+                envStr.split(',').forEach(pair => {
+                    const [key, value] = pair.trim().split('=');
+                    if (key && value) env[key] = value;
+                });
+                if (Object.keys(env).length > 0) payload.env = env;
+            }
+            
+            try {
+                const response = await fetch('/v1/launcher/start', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Launched ${result.instance_id} on port ${result.port}`);
+                    await loadInstances();
+                    cancelLaunch();
+                } else {
+                    const error = await response.text();
+                    alert(`Failed to launch: ${error}`);
+                }
+            } catch (error) {
+                console.error('Launch error:', error);
+                alert('Failed to launch node');
+            }
+        }
+        
+        async function stopInstance(instanceId) {
+            if (!confirm(`Stop instance ${instanceId}?`)) return;
+            
+            try {
+                const response = await fetch('/v1/launcher/stop', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ instance_id: instanceId })
+                });
+                
+                if (response.ok) {
+                    await loadInstances();
+                } else {
+                    alert('Failed to stop instance');
+                }
+            } catch (error) {
+                console.error('Stop error:', error);
+                alert('Failed to stop instance');
+            }
+        }
+
+        async function showLogs(instanceId) {
+            currentLogInstance = instanceId;
+            document.getElementById('logs-instance-id').textContent = instanceId;
+            document.getElementById('instance-logs').style.display = 'block';
+            const container = document.getElementById('logs-content');
+            if (container) container.textContent = 'Loading...';
+            await refreshLogs();
+        }
+        
+        async function refreshLogs() {
+            if (!currentLogInstance || !token) return;
+            const container = document.getElementById('logs-content');
+            if (container) container.textContent = 'Loading...';
+
+            try {
+                const safeId = encodeURIComponent(currentLogInstance);
+                const response = await fetch(`/v1/launcher/instances/${safeId}/logs?lines=200`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    const logs = await response.json();
+                    const text = typeof logs === 'string' ? logs : (logs.logs || logs.message || 'No logs available');
+                    if (container) {
+                        container.textContent = text;
+                        container.scrollTop = container.scrollHeight;
+                    }
+                    return;
+                }
+
+                let msg = await response.text();
+                try {
+                    const parsed = JSON.parse(msg);
+                    if (parsed && typeof parsed === 'object') {
+                        msg = parsed.error || parsed.message || msg;
+                    }
+                } catch (e) {
+                    // ignore
+                }
+
+                const hint = response.status === 404
+                    ? 'This target is not a managed Launcher instance. Start it via Launcher to capture logs.'
+                    : 'Failed to load logs.';
+
+                if (container) {
+                    container.textContent = `${hint}\n(${response.status}) ${msg || ''}`.trim();
+                }
+            } catch (error) {
+                console.error('Failed to load logs:', error);
+                if (container) {
+                    const msg = error && error.message ? error.message : String(error);
+                    container.textContent = `Error loading logs: ${msg}`;
+                }
+            }
+        }
+        
+        async function loadGraph() {
+            if (!token) return;
+            
+            try {
+                const response = await fetch('/v1/graph', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    const graphData = await response.json();
+                    drawGraph(graphData);
+                }
+            } catch (error) {
+                console.error('Graph error:', error);
+            }
+        }
+        
+        function drawGraph(graphData) {
+            const svg = document.getElementById('graph-svg');
+            const container = svg.parentElement;
+            const width = container.clientWidth - 64;
+            const height = 400;
+            
+            // Gravity UI: De-emphasize graph when not in navigate mode
+            const isNavigate = currentUiMode === 'navigate';
+            container.style.opacity = isNavigate ? '1' : '0.4';
+            container.style.filter = isNavigate ? 'none' : 'blur(2px)';
+            container.style.transition = 'all var(--hapa-anim-ms) ease-in-out';
+            
+            svg.innerHTML = '';
+            
+            if (!graphData.nodes || graphData.nodes.length === 0) {
+                svg.innerHTML = '<text x="50%" y="50%" text-anchor="middle" fill="var(--text-secondary)">No nodes to display</text>';
+                return;
+            }
+            
+            // Position nodes in a circle
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const radius = Math.min(width, height) / 3;
+            
+            graphData.nodes.forEach((node, i) => {
+                const angle = (i * 2 * Math.PI) / graphData.nodes.length;
+                node.x = centerX + radius * Math.cos(angle);
+                node.y = centerY + radius * Math.sin(angle);
+            });
+            
+            // Draw edges
+            graphData.edges.forEach(edge => {
+                const source = graphData.nodes.find(n => n.id === edge.source);
+                const target = graphData.nodes.find(n => n.id === edge.target);
+                
+                if (source && target) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', source.x);
+                    line.setAttribute('y1', source.y);
+                    line.setAttribute('x2', target.x);
+                    line.setAttribute('y2', target.y);
+                    line.setAttribute('stroke', 'var(--glass-border)');
+                    line.setAttribute('stroke-width', isNavigate ? '2' : '1');
+                    line.setAttribute('opacity', isNavigate ? '0.6' : '0.2');
+                    svg.appendChild(line);
+                }
+            });
+            
+            // Draw nodes
+            graphData.nodes.forEach(node => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.style.cursor = isNavigate ? 'pointer' : 'default';
+                if (isNavigate) {
+                    g.addEventListener('click', (e) => {
+                        if (e) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                        viewNode(node.id);
+                    });
+                }
+                
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', node.x);
+                circle.setAttribute('cy', node.y);
+                circle.setAttribute('r', isNavigate ? '24' : '16');
+                
+                // Astros: Status colors
+                const color = node.status === 'online' ? 'var(--status-success)' : 
+                              node.status === 'offline' ? 'var(--status-error)' : 'var(--text-secondary)';
+                
+                circle.setAttribute('fill', color);
+                circle.setAttribute('fill-opacity', isNavigate ? '0.8' : '0.4');
+                circle.setAttribute('stroke', 'white');
+                circle.setAttribute('stroke-width', '1');
+                
+                if (isNavigate) {
+                    circle.style.filter = `drop-shadow(0 0 8px ${color})`;
+                }
+                
+                g.appendChild(circle);
+                
+                if (isNavigate || currentUiMode === 'browse') {
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', node.x);
+                    text.setAttribute('y', node.y + (isNavigate ? 45 : 35));
+                    text.setAttribute('text-anchor', 'middle');
+                    text.setAttribute('fill', 'var(--text-primary)');
+                    text.setAttribute('font-size', isNavigate ? '14' : '11');
+                    text.setAttribute('font-family', 'JetBrains Mono, monospace');
+                    text.textContent = node.label;
+                    g.appendChild(text);
+                }
+                
+                svg.appendChild(g);
+            });
+        }
+        
+        function formatUptime(seconds) {
+            if (!seconds) return '-';
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            
+            if (days > 0) return `${days}d ${hours}h`;
+            if (hours > 0) return `${hours}h ${mins}m`;
+            return `${mins}m`;
+        }
+        
+        async function showNodeLogs(nodeId) {
+            // Open launcher modal and show logs for this node
+            await showLauncher();
+            await loadInstances();
+
+            const node = nodes.find(n => n.node_id === nodeId);
+            let port = null;
+            if (node && node.base_url) {
+                try {
+                    const url = new URL(node.base_url);
+                    port = url.port ? parseInt(url.port) : null;
+                } catch (e) {
+                    // ignore
+                }
+            }
+            if (!port) {
+                const m = String(nodeId).match(/_(\d+)$/);
+                if (m) {
+                    port = parseInt(m[1]);
+                }
+            }
+
+            const parsedPid = parseInt(nodeId);
+            const instance = instances.find(i =>
+                i.instance_id === nodeId ||
+                (Number.isFinite(parsedPid) && i.pid === parsedPid) ||
+                (port && i.port === port)
+            );
+
+            const logId = instance ? instance.instance_id : nodeId;
+            await showLogs(logId);
+        }
+        
+        async function viewNode(nodeId) {
+            const node = nodes.find(n => n.node_id === nodeId);
+            if (!node) return;
+
+            // Set global mode to Inspect if not already
+            if (currentUiMode !== 'inspect') {
+                setUiMode('inspect');
+            }
+
+            const inspector = document.getElementById('node-inspector');
+            inspector.style.display = 'block';
+
+            // Populate identity with breadcrumbs
+            const identityContainer = document.getElementById('inspector-identity');
+            identityContainer.innerHTML = `
+                <div class="breadcrumb">
+                    <span class="breadcrumb-item">Nodes</span>
+                    <span class="breadcrumb-item">${node.service_type.toUpperCase()}</span>
+                    <span class="breadcrumb-item active">${node.node_id}</span>
+                </div>
+                <div class="detail-item"><span class="detail-label">ID:</span><span class="detail-value">${node.node_id}</span></div>
+                <div class="detail-item"><span class="detail-label">Name:</span><span class="detail-value">${node.display_name || '—'}</span></div>
+                <div class="detail-item"><span class="detail-label">Service:</span><span class="detail-value">${node.service_type}</span></div>
+                <div class="detail-item"><span class="detail-label">Base URL:</span><span class="detail-value">${node.base_url}</span></div>
+            `;
+
+            // Populate Health
+            const health = node.health || {};
+            const lastPing = node.last_telemetry || node.last_seen || null;
+            document.getElementById('inspector-health').innerHTML = `
+                <div class="detail-item"><span class="detail-label">Status:</span><span class="detail-value node-status ${node.status}">${node.status}</span></div>
+                <div class="detail-item"><span class="detail-label">Health:</span><span class="detail-value" style="color:var(--status-${health.status === 'healthy' ? 'success' : 'warning'})">${health.status || 'UNKNOWN'}</span></div>
+                ${health.message ? `<div class="detail-item"><span class="detail-label">Message:</span><span class="detail-value">${health.message}</span></div>` : ''}
+                <div class="detail-item"><span class="detail-label">Last Ping:</span><span class="detail-value">${lastPing ? new Date(lastPing).toLocaleTimeString() : 'NEVER'}</span></div>
+            `;
+
+            // Populate Network
+            const metrics = node.metrics || {};
+            document.getElementById('inspector-network').innerHTML = `
+                <div class="detail-item"><span class="detail-label">Requests/min:</span><span class="detail-value">${metrics.requests_per_minute?.toFixed(1) || '0.0'}</span></div>
+                <div class="detail-item"><span class="detail-label">Active Conns:</span><span class="detail-value">${metrics.active_connections || '0'}</span></div>
+                <div class="detail-item"><span class="detail-label">Avg Response:</span><span class="detail-value">${metrics.response_time_ms || '0'}ms</span></div>
+            `;
+
+            // Populate Metrics Grid
+            document.getElementById('inspector-metrics-grid').innerHTML = `
+                <div class="metric">
+                    <div class="metric-label">CPU Usage</div>
+                    <div class="metric-value">${metrics.cpu_percent?.toFixed(1) || '0.0'}%</div>
+                    <div class="metric-bar"><div class="metric-fill blue" style="width: ${metrics.cpu_percent || 0}%"></div></div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Memory Usage</div>
+                    <div class="metric-value">${metrics.memory_mb || 0} MB</div>
+                    <div class="metric-bar"><div class="metric-fill blue" style="width: ${metrics.memory_percent || 0}%"></div></div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Disk Space</div>
+                    <div class="metric-value">${metrics.disk_gb || 0} GB</div>
+                    <div class="metric-bar"><div class="metric-fill blue" style="width: ${metrics.disk_percent || 0}%"></div></div>
+                </div>
+            `;
+
+            // Populate Capabilities
+            const capabilities = node.capabilities || {};
+            const capContainer = document.getElementById('inspector-capabilities');
+            if (capabilities.service) {
+                capContainer.innerHTML = `
+                    <div class="capability-chip">API: ${capabilities.api_version || 'v1'}</div>
+                    ${capabilities.modalities?.image ? '<div class="capability-chip">IMAGE_GEN</div>' : ''}
+                    ${capabilities.modalities?.text ? '<div class="capability-chip">LLM</div>' : ''}
+                    <div class="capability-chip">${capabilities.service.toUpperCase()}</div>
+                `;
+            } else {
+                capContainer.innerHTML = '<div style="color:var(--text-secondary); font-size:0.8rem;">No advanced capabilities reported</div>';
+            }
+        }
+
+        function closeInspector() {
+            if (currentUiMode === 'inspect') {
+                setUiMode('browse');
+            }
+            document.getElementById('node-inspector').style.display = 'none';
+        }
+        
+        async function deleteNode(nodeId) {
+            if (!confirm(`Remove node ${nodeId} from monitoring?`)) return;
+            
+            try {
+                const response = await fetch(`/v1/nodes/${nodeId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    await refreshData();
+                }
+            } catch (error) {
+                console.error('Delete error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
