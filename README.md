@@ -242,3 +242,11 @@ Project-level license: MIT under Hapa.ai / Calder Wong. See `LICENSE`.
 Bananas attribution option: contributors may opt into Bananas work-contribution tracking for attribution, provenance, and recognition. Bananas attribution is optional and does not replace the MIT license terms.
 
 Third-party dependencies keep their own licenses and notices. Do not remove or rewrite third-party license files inside dependency directories or vendored assets.
+
+<!-- HAPA-README-SCREENSHOT-2026-05-22 -->
+
+## Screenshot
+
+![hapa-telemetry-node UI screenshot](docs/assets/screenshots/readme-hapa-telemetry-node.png)
+
+Hapa Telemetry dashboard browse mode.
