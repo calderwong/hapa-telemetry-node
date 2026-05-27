@@ -55,6 +55,11 @@ make test
 make discover
 make list
 make graph
+
+# Push current telemetry snapshots to Janus World Node
+HAPA_JANUS_WORLD_NODE_TOKEN=... make janus-push
+# Equivalent direct CLI
+.venv/bin/python -m hapa_telemetry_node janus-push --janus-url http://127.0.0.1:8741 --janus-token ...
 ```
 
 Equivalent direct CLI entrypoint:
@@ -94,6 +99,10 @@ Environment variables used by the service include:
 - `HAPA_TELEMETRY_DB_PATH` — test/runtime database override used by tests
 - `HAPA_OVERWATCH_ROOT` or `OVERWATCH_ROOT` — override Overwatch root
 - `HAPA_REGISTRY_PATH` and `HAPA_LAUNCHER_LOG_DIR` — registry/launcher integration paths
+- `HAPA_TELEMETRY_JANUS_BRIDGE_ENABLED` — opt-in periodic Telemetry → Janus snapshot bridge, default disabled
+- `HAPA_JANUS_WORLD_NODE_BASE_URL` — Janus bridge target, default `http://127.0.0.1:8741`
+- `HAPA_JANUS_WORLD_NODE_TOKEN` or `HAPA_JANUS_TOKEN` — bearer token used by the Janus bridge
+- `HAPA_TELEMETRY_JANUS_BRIDGE_INTERVAL` — periodic Janus bridge interval, default `30`
 
 Do not commit `.node_token`, `telemetry.db`, runtime artifacts, generated self-test result JSON, or `.venv`.
 
@@ -116,6 +125,9 @@ Authenticated Hapa node APIs:
 - `POST /v1/discovery/register`
 - `POST /v1/discovery/scan`
 - `GET /v1/graph`
+- `POST /v1/bridges/janus/push` — one-shot push of current Telemetry node snapshots into Janus World Node; also exposed in the dashboard as the Janus Snapshot Bridge panel
+
+Repository-local agent/protocol context lives in `AGENTS.md`. Keep API, CLI, UI, tests, `README.md`, and `docs/FEATURE_PARITY.md` aligned for operator-facing changes.
 
 Authenticated Overwatch bridge APIs include:
 
@@ -166,6 +178,7 @@ Outputs:
 - Runtime metadata under `artifacts/hapa-telemetry-node/runtime/`
 - Self-test result JSON under `artifacts/hapa-telemetry-node/runs/self_test/`
 - Optional Overwatch writes through guarded write endpoints
+- Optional Janus World Node writes of truth-safe node snapshots through `POST /v1/world/node-snapshots`
 
 ## Node integration contract
 
@@ -209,11 +222,13 @@ hapa-telemetry-node/
 │   ├── collector.py        # telemetry polling
 │   ├── database.py         # SQLite storage
 │   ├── discovery.py        # mDNS/port/registry discovery
+│   ├── janus_bridge.py     # optional Telemetry → Janus node snapshot bridge
 │   ├── models.py           # Pydantic models
 │   ├── overwatch_bridge.py # Overwatch document/search/write bridge
 │   ├── registry.py         # registry and launcher support
 │   └── self_test.py        # live-service self-test harness
 ├── tests/
+│   ├── test_janus_bridge.py
 │   └── test_overwatch_api.py
 ├── web/
 │   └── index.html

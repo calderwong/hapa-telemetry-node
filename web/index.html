@@ -997,6 +997,23 @@
             <button class="btn" onclick="showLauncher()">🚀 Launcher</button>
         </div>
 
+        <section class="auth-section" id="janus-bridge-panel">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; flex-wrap:wrap;">
+                <div>
+                    <h3>🌉 Janus Snapshot Bridge</h3>
+                    <div style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 0.35rem;">
+                        POST /v1/bridges/janus/push • opt-in context squawk into Janus node snapshots, not truth claims.
+                    </div>
+                </div>
+                <button class="btn" onclick="pushJanusSnapshots()">Push to Janus</button>
+            </div>
+            <div style="display:grid; grid-template-columns: minmax(240px, 1fr) minmax(220px, 1fr); gap: 1rem; margin-top: 1rem;">
+                <input class="form-control" id="janus-base-url" placeholder="Janus base URL (default http://127.0.0.1:8741)" value="http://127.0.0.1:8741" />
+                <input class="form-control" id="janus-token" type="password" placeholder="Janus bearer token" />
+            </div>
+            <div id="janus-push-status" style="font-family:'JetBrains Mono', monospace; font-size:0.8rem; color: var(--text-secondary); margin-top: 0.75rem; white-space: pre-wrap;">Bridge idle.</div>
+        </section>
+
         <div class="overwatch-command-center" id="overwatch-command-center">
             <div class="ow-header">
                 <div>
@@ -1337,6 +1354,7 @@
         // Dev-only token persistence
         const isLocalDev = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
         const TOKEN_STORAGE_KEY = 'hapa_telemetry_dev_token_v1';
+        const JANUS_BASE_URL_STORAGE_KEY = 'hapa_telemetry_janus_base_url_v1';
         
         let currentUiMode = 'browse';
         
@@ -2815,6 +2833,11 @@
 
             if (isLocalDev) {
                 const savedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+                const savedJanusBaseUrl = localStorage.getItem(JANUS_BASE_URL_STORAGE_KEY);
+                if (savedJanusBaseUrl) {
+                    const janusBaseInput = document.getElementById('janus-base-url');
+                    if (janusBaseInput) janusBaseInput.value = savedJanusBaseUrl;
+                }
                 if (savedToken) {
                     document.getElementById('token-input').value = savedToken;
                     token = savedToken;
@@ -2837,6 +2860,59 @@
             }
         }
         
+        async function pushJanusSnapshots() {
+            const statusEl = document.getElementById('janus-push-status');
+            const setStatus = (message, color) => {
+                if (!statusEl) return;
+                statusEl.textContent = message;
+                statusEl.style.color = color || 'var(--text-secondary)';
+            };
+
+            if (!token) {
+                setStatus('Connect to Telemetry first.', 'var(--status-warning)');
+                return;
+            }
+
+            const janusBaseUrl = (document.getElementById('janus-base-url')?.value || 'http://127.0.0.1:8741').trim();
+            const janusToken = (document.getElementById('janus-token')?.value || '').trim();
+            if (!janusToken) {
+                setStatus('Janus bearer token is required.', 'var(--status-warning)');
+                return;
+            }
+
+            if (isLocalDev && janusBaseUrl) {
+                localStorage.setItem(JANUS_BASE_URL_STORAGE_KEY, janusBaseUrl);
+            }
+
+            setStatus(`Pushing snapshots to ${janusBaseUrl}...`, 'var(--status-info)');
+            try {
+                const response = await fetch('/v1/bridges/janus/push', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        janus_base_url: janusBaseUrl,
+                        janus_token: janusToken
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    setStatus(`Janus push failed: ${data.detail || data.error || response.status}`, 'var(--status-error)');
+                    return;
+                }
+
+                const results = Array.isArray(data.results) ? data.results : [];
+                const failedNodes = results.filter(r => !r.ok).map(r => `${r.node_id}: ${r.error || r.status_code || 'failed'}`);
+                const summary = `Janus push ${data.ok ? 'complete' : 'partial'}: attempted=${data.attempted ?? 0}, succeeded=${data.succeeded ?? 0}, failed=${data.failed ?? 0}`;
+                setStatus(failedNodes.length ? `${summary}\n${failedNodes.join('\n')}` : summary, data.ok ? 'var(--status-success)' : 'var(--status-warning)');
+            } catch (error) {
+                console.error('Janus push error:', error);
+                setStatus(`Janus push error: ${error}`, 'var(--status-error)');
+            }
+        }
+
         async function connect() {
             const inputToken = document.getElementById('token-input').value.trim();
             if (!inputToken) {

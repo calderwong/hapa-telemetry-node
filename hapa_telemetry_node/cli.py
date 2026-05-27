@@ -1081,6 +1081,43 @@ def logs(instance_id, lines):
         console.print(f"[red]Error: {e}[/red]")
 
 
+@cli.command("janus-push")
+@click.option("--janus-url", default=None, help="Janus World Node base URL")
+@click.option("--janus-token", default=None, help="Janus World Node bearer token")
+@click.option("--timeout", default=5.0, type=float, help="Janus request timeout passed through to bridge")
+def janus_push(janus_url: Optional[str], janus_token: Optional[str], timeout: float):
+    """Push current node snapshots into Janus World Node."""
+    target_url = (janus_url or os.environ.get("HAPA_JANUS_WORLD_NODE_BASE_URL") or "http://127.0.0.1:8741").rstrip("/")
+    target_token = janus_token or os.environ.get("HAPA_JANUS_WORLD_NODE_TOKEN") or os.environ.get("HAPA_JANUS_TOKEN")
+    if not target_token:
+        console.print("[red]Missing Janus token. Pass --janus-token or set HAPA_JANUS_WORLD_NODE_TOKEN/HAPA_JANUS_TOKEN.[/red]")
+        raise click.ClickException("janus token required")
+
+    payload = {"janus_base_url": target_url, "janus_token": target_token, "timeout": float(timeout)}
+    response = httpx.post(
+        f"{get_base_url()}/v1/bridges/janus/push",
+        json=payload,
+        headers={"Authorization": f"Bearer {get_token()}"},
+        timeout=10.0,
+    )
+
+    if response.status_code != 200:
+        raise click.ClickException(f"Janus push failed: HTTP {response.status_code}: {response.text}")
+
+    data = response.json()
+    ok = "✓" if data.get("ok") else "!"
+    console.print(
+        f"[green]{ok}[/green] Janus push: attempted={data.get('attempted', 0)} "
+        f"succeeded={data.get('succeeded', 0)} failed={data.get('failed', 0)}"
+    )
+    for item in data.get("results") or []:
+        node_id = item.get("node_id", "unknown")
+        if item.get("ok"):
+            console.print(f"  [green]✓[/green] {node_id}")
+        else:
+            console.print(f"  [yellow]![/yellow] {node_id}: {item.get('error') or item.get('status_code') or 'failed'}")
+
+
 @cli.command()
 def test():
     """Run self-test"""
