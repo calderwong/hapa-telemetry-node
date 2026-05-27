@@ -25,7 +25,7 @@ from .auth import TokenAuth
 from .discovery import NodeDiscovery
 from .collector import TelemetryCollector
 from .registry import NodeRegistry, NodeState
-from . import overwatch_bridge
+from . import janus_bridge, overwatch_bridge
 
 logger = logging.getLogger(__name__)
 
@@ -35,13 +35,18 @@ auth = TokenAuth()
 discovery = None
 collector = None
 registry = NodeRegistry()
+janus_bridge_task = None
+
+
+def _env_truthy(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
-    global discovery, collector
-    disable_bg = os.environ.get("HAPA_TELEMETRY_DISABLE_BG_TASKS", "").strip().lower() in {"1", "true", "yes", "y", "on"}
+    global discovery, collector, janus_bridge_task
+    disable_bg = _env_truthy("HAPA_TELEMETRY_DISABLE_BG_TASKS")
     
     # Startup
     await db.initialize()
@@ -79,15 +84,37 @@ async def lifespan(app: FastAPI):
                 await discovery.discover_all()
 
         asyncio.create_task(periodic_discovery())
+
+        if _env_truthy("HAPA_TELEMETRY_JANUS_BRIDGE_ENABLED"):
+            janus_base_url = os.environ.get("HAPA_JANUS_WORLD_NODE_BASE_URL", "http://127.0.0.1:8741")
+            janus_token = os.environ.get("HAPA_JANUS_WORLD_NODE_TOKEN") or os.environ.get("HAPA_JANUS_TOKEN")
+            if janus_token:
+                janus_bridge_task = asyncio.create_task(
+                    janus_bridge.janus_bridge_loop(
+                        db=db,
+                        janus_base_url=janus_base_url,
+                        janus_token=janus_token,
+                        interval=int(os.environ.get("HAPA_TELEMETRY_JANUS_BRIDGE_INTERVAL", 30)),
+                    )
+                )
+            else:
+                logger.warning("Janus bridge enabled but no HAPA_JANUS_WORLD_NODE_TOKEN/HAPA_JANUS_TOKEN is set")
     else:
         discovery = None
         collector = None
+        janus_bridge_task = None
     
     logger.info("Telemetry node started")
     
     yield
     
     # Shutdown
+    if janus_bridge_task:
+        janus_bridge_task.cancel()
+        try:
+            await janus_bridge_task
+        except asyncio.CancelledError:
+            pass
     if collector:
         await collector.stop()
     if discovery:
@@ -144,7 +171,8 @@ async def capabilities():
             "graph",
             "query",
             "register",
-            "overwatch_bridge"
+            "overwatch_bridge",
+            "janus_bridge"
         ],
         "overwatch": {
             "root": overwatch_root,
@@ -666,6 +694,41 @@ async def overwatch_chat(payload: Dict[str, Any]) -> Dict[str, Any]:
             "citations": citations,
             "llada": {"used": False, "base_url": base_url, "error": str(e)},
         }
+
+
+@app.post("/v1/bridges/janus/push", dependencies=[Depends(auth.verify_token)])
+async def janus_bridge_push(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """One-shot push of current Telemetry node snapshots into Janus World."""
+    janus_base_url = str(
+        payload.get("janus_base_url")
+        or os.environ.get("HAPA_JANUS_WORLD_NODE_BASE_URL")
+        or "http://127.0.0.1:8741"
+    )
+    janus_token = str(
+        payload.get("janus_token")
+        or os.environ.get("HAPA_JANUS_WORLD_NODE_TOKEN")
+        or os.environ.get("HAPA_JANUS_TOKEN")
+        or ""
+    )
+    try:
+        timeout = float(payload.get("timeout", 5.0))
+    except Exception:
+        timeout = 5.0
+
+    if not janus_token:
+        raise HTTPException(status_code=400, detail="janus_token is required")
+
+    try:
+        return await janus_bridge.push_snapshots_once(
+            db=db,
+            janus_base_url=janus_base_url,
+            janus_token=janus_token,
+            timeout=timeout,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Janus bridge push failed: {e}")
 
 
 @app.get("/v1/nodes", dependencies=[Depends(auth.verify_token)])
