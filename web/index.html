@@ -3653,5 +3653,49 @@
             }
         }
     </script>
+
+  <script data-hapa-kanban-ingress="hapa-app-hapa-telemetry-node">
+    (function () {
+      var projectId = 'hapa-app-hapa-telemetry-node';
+      var boardUrl = 'http://127.0.0.1:5181/?project=' + encodeURIComponent(projectId);
+      function mountKanbanIngress() {
+        if (!document.body || document.querySelector('[data-hapa-kanban-link="' + projectId + '"]')) return;
+        var link = document.createElement('a');
+        link.href = boardUrl;
+        link.target = '_blank';
+        link.rel = 'noreferrer';
+        link.textContent = 'Kanban';
+        link.className = 'hapa-kanban-ingress';
+        link.dataset.hapaKanbanLink = projectId;
+        link.setAttribute('aria-label', 'Open Overwatch Kanban board for ' + projectId);
+        Object.assign(link.style, {
+          position: 'fixed',
+          right: '16px',
+          bottom: '16px',
+          zIndex: '2147483000',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: '38px',
+          padding: '0 14px',
+          border: '1px solid rgba(55, 215, 255, 0.55)',
+          borderRadius: '8px',
+          background: 'rgba(2, 6, 23, 0.92)',
+          color: '#dffbff',
+          font: '700 12px/1.1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+          letterSpacing: '0',
+          textDecoration: 'none',
+          boxShadow: '0 0 18px rgba(55, 215, 255, 0.22)',
+          backdropFilter: 'blur(10px)'
+        });
+        document.body.appendChild(link);
+      }
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', mountKanbanIngress, { once: true });
+      } else {
+        mountKanbanIngress();
+      }
+    }());
+  </script>
 </body>
 </html>
