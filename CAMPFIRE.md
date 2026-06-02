@@ -18,8 +18,8 @@ Hapa Telemetry Node is the local observability and discovery lighthouse for the 
 - SQLite telemetry state exists as `telemetry.db` in this checkout but should not be committed
 - Tests: `tests/test_overwatch_api.py`
 - Dashboard asset: `web/index.html`
-- Overwatch bridge defaults to `/Users/calderwong/Desktop/.Overwatch`
-- Global wiki page: `/Users/calderwong/Desktop/Hapa_Worldbuilding_Wiki/Nodes/Existing/hapa-telemetry-node.md`
+- Overwatch bridge defaults to `${HAPA_SYSTEM_ROOT}/ops/overwatch/overwatch/SOURCE`
+- Global wiki page: `${HAPA_SYSTEM_ROOT}/canon/wiki/hapa-worldbuilding-wiki/SOURCE/Nodes/Existing/hapa-telemetry-node.md`
 
 ## Inferred Hapa role
 

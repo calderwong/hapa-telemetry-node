@@ -142,7 +142,7 @@ class NodeRegistry:
                 "description": "Image generation with mflux",
                 "launch_config": {
                     "command": "python -m hapa_media_node",
-                    "cwd": "/Users/calderwong/hapa-mlx-station",
+                    "cwd": "${HAPA_SYSTEM_ROOT}/nodes/generation/hapa-mlx-station/SOURCE",
                     "env": {"HAPA_MEDIA_NODE_PORT": "8723"}
                 },
                 "default_port": 8723,
@@ -155,7 +155,7 @@ class NodeRegistry:
                 "description": "Router for multiple media nodes",
                 "launch_config": {
                     "command": "python -m hapa_media_node hub",
-                    "cwd": "/Users/calderwong/hapa-mlx-station",
+                    "cwd": "${HAPA_SYSTEM_ROOT}/nodes/generation/hapa-mlx-station/SOURCE",
                     "env": {"HAPA_MEDIA_HUB_PORT": "8726"}
                 },
                 "default_port": 8726,
@@ -168,7 +168,7 @@ class NodeRegistry:
                 "description": "Sovereign local LLM service",
                 "launch_config": {
                     "command": "python -m uvicorn src.server:app --host 127.0.0.1 --port $PORT",
-                    "cwd": "/Users/calderwong/Desktop/hapa-llada-node",
+                    "cwd": "${HAPA_SYSTEM_ROOT}/nodes/generation/hapa-llada-node/SOURCE",
                     "env": {"PORT": "8085"}
                 },
                 "default_port": 8085,
@@ -181,7 +181,7 @@ class NodeRegistry:
                 "description": "Local API+UI+CLI scaffold",
                 "launch_config": {
                     "command": "python -m consul_node",
-                    "cwd": "/Users/calderwong/Desktop/Consul Node Proto",
+                    "cwd": "${HAPA_SYSTEM_ROOT}/protocols/consul-node-proto/SOURCE",
                     "env": {"CONSUL_NODE_PORT": "8731"}
                 },
                 "default_port": 8731,
@@ -194,7 +194,7 @@ class NodeRegistry:
                 "description": "3D audio stem visualizer",
                 "launch_config": {
                     "command": "python -m hapa_luminastem_node",
-                    "cwd": "/Users/calderwong/Desktop/hapa-luminastem-station",
+                    "cwd": "${HAPA_SYSTEM_ROOT}/nodes/generation/hapa-luminastem-station/SOURCE",
                     "env": {"HAPA_LUMINASTEM_PORT": "8732"}
                 },
                 "default_port": 8732,
@@ -207,7 +207,7 @@ class NodeRegistry:
                 "description": "Parity API for CLI/library",
                 "launch_config": {
                     "command": "npm run dev:parity-api",
-                    "cwd": "/Users/calderwong/Desktop/pulse-node-proto-dev/hapa-cultivation-suite",
+                    "cwd": "${HAPA_SYSTEM_ROOT}/protocols/hapa-cultivation-suite/SOURCE",
                     "env": {"PORT": "8787"}
                 },
                 "default_port": 8787,
@@ -220,7 +220,7 @@ class NodeRegistry:
                 "description": "Recording Lore and Canon (.bardClass)",
                 "launch_config": {
                     "command": "python -m hapa_lore_node",
-                    "cwd": "/Users/calderwong/Desktop/hapa-lore-node",
+                    "cwd": "${HAPA_SYSTEM_ROOT}/nodes/memory/hapa-lore-node/SOURCE",
                     "env": {"HAPA_LORE_NODE_PORT": "8734"}
                 },
                 "default_port": 8734,
@@ -233,7 +233,7 @@ class NodeRegistry:
                 "description": "Centralized task management",
                 "launch_config": {
                     "command": "npm start",
-                    "cwd": "/Users/calderwong/Desktop/hapa-open-tasks-node",
+                    "cwd": "${HAPA_SYSTEM_ROOT}/nodes/coordination/hapa-open-tasks-node/SOURCE",
                     "env": {"HAPA_OPEN_TASKS_PORT": "8735"}
                 },
                 "default_port": 8735,
@@ -246,7 +246,7 @@ class NodeRegistry:
                 "description": "Swift-native cryptography service",
                 "launch_config": {
                     "command": "./.build/debug/hapa-crypto-node serve --port $PORT",
-                    "cwd": "/Users/calderwong/Desktop/hapa-crypto-node",
+                    "cwd": "${HAPA_SYSTEM_ROOT}/nodes/trust/hapa-crypto-node/SOURCE",
                     "env": {"PORT": "8736"}
                 },
                 "default_port": 8736,
@@ -259,7 +259,7 @@ class NodeRegistry:
                 "description": "Local world truth kernel (event-sourced SQLite)",
                 "launch_config": {
                     "command": "python -m hapa_janus_world_node start",
-                    "cwd": "/Users/calderwong/Desktop/hapa-janus-world-node",
+                    "cwd": "${HAPA_SYSTEM_ROOT}/nodes/world/hapa-janus-world-node/SOURCE",
                     "env": {"HAPA_JANUS_WORLD_NODE_PORT": "8741"}
                 },
                 "default_port": 8741,
