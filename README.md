@@ -297,15 +297,15 @@ Discovery and monitoring hub that tracks Hapa node health, capabilities, launche
 
 ### Related Hapa nodes
 
-- [Hapa AG / Dev Proto](hapa://node/hapa-dev-proto) — Primary local-first app; many nodes feed it cards, assets, chat, debug, or projection data.
-- [Hapa Worldbuilding Wiki](hapa://node/hapa-worldbuilding-wiki) — Canonical Markdown graph for lore, nodes, names, cards, systems, and provenance.
-- [Overwatch](hapa://node/overwatch) — Operations map: inventory, source index, task inbox, protocols, and runbooks.
-- [Hapa Keys Node](hapa://node/hapa-keys-node) — Local key vault used by authenticated nodes and tools.
-- [Hapa Lore Node](hapa://node/hapa-lore-node) — Chronicle/canon service for daily progress, lore, and searchable wisdom.
-- [Hapa Anvil Node](hapa://node/hapa-anvil-node) — Card standardization/evaluation/forge node for turning raw card ideas into usable artifacts.
-- [Hapa Janus World Node](hapa://node/hapa-janus-world-node) — World-state truth kernel and event tape for Janus/desktop simulation work.
-- [Hapa MLX Station](hapa://node/hapa-mlx-station) — Apple Silicon media-generation station that produces visual/audio assets for cards, wiki, and production runs.
-- [Hapa Lance Node](hapa://node/hapa-lance-node) — Local indexing/projection layer for cards, wiki chunks, embeddings, and multimodal records.
+- [Hapa AG / Dev Proto](https://github.com/calderwong/hapa-dev-proto-private) — Primary local-first app; many nodes feed it cards, assets, chat, debug, or projection data.
+- [Hapa Worldbuilding Wiki](https://github.com/calderwong/hapa-worldbuilding-wiki) — Canonical Markdown graph for lore, nodes, names, cards, systems, and provenance.
+- [Overwatch](https://github.com/calderwong/overwatch) — Operations map: inventory, source index, task inbox, protocols, and runbooks.
+- [Hapa Keys Node](https://github.com/calderwong/hapa-keys-node) — Local key vault used by authenticated nodes and tools.
+- [Hapa Lore Node](https://github.com/calderwong/hapa-lore-node) — Chronicle/canon service for daily progress, lore, and searchable wisdom.
+- [Hapa Anvil Node](https://github.com/calderwong/hapa-anvil-node) — Card standardization/evaluation/forge node for turning raw card ideas into usable artifacts.
+- [Hapa Janus World Node](https://github.com/calderwong/hapa-janus-world-node) — World-state truth kernel and event tape for Janus/desktop simulation work.
+- [Hapa MLX Station](https://github.com/calderwong/hapa-mlx-station) — Apple Silicon media-generation station that produces visual/audio assets for cards, wiki, and production runs.
+- [Hapa Lance Node](https://github.com/calderwong/hapa-lance-node) — Local indexing/projection layer for cards, wiki chunks, embeddings, and multimodal records.
 
 ### Operating contract
 
