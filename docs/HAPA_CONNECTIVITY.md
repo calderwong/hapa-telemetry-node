@@ -1,7 +1,7 @@
 <!-- HAPA-CONNECTIVITY-DOC:BEGIN -->
 # Hapa Connectivity
 
-Generated: 2026-06-01T01:03:18.084Z
+Generated: 2026-06-03T23:17:21.548Z
 
 This file is a publication-safe cross-link for humans and AIs. It describes how this repo fits into the Hapa system without embedding private local paths, secrets, heavy assets, DB payloads, or generated media.
 
